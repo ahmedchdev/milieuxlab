@@ -1903,20 +1903,18 @@ body.has-install-gate .app { display: none; }
   padding: var(--space-5);
 }
 
-/* Calendar + day-details modals: reserve space for the absolute close
-   button at the top, so the title / nav don't overlap the X. */
-.calendar-card,
-.day-details-card {
-  padding-top: var(--space-7);
-}
+/* Hide the X close button inside the calendar + day-details modals:
+   the user can dismiss them via the backdrop or by clicking a day
+   again. This keeps the layout clean. */
+#calendar-modal .ios-modal-close,
+#day-details-modal .ios-modal-close { display: none; }
 
 .calendar-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  margin: calc(-1 * var(--space-4)) 0 var(--space-4);
-  /* Pull header up into the space we reserved for the close button */
+  margin-bottom: var(--space-4);
 }
 .calendar-title {
   font-family: var(--font-display);
