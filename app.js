@@ -1101,18 +1101,12 @@ function setupInstallGate() {
   gate.hidden = false;
   document.body.classList.add('has-install-gate');
 
-  // Two buttons in the gate. We show only the one that matches the device:
-  //   - Android user  → see only "Installer maintenant" (native prompt)
-  //   - iOS user      → see only "Installer sur iPhone" (opens the modal)
-  //   - other/desktop → both, so they can pick
+  // Two buttons in the gate. Both are visible on every device so the user
+  // can pick whichever applies. The Android button triggers the native
+  // install dialog when available (does nothing on iOS where no such API
+  // exists); the iOS button opens the instruction modal.
   const androidBtn = document.getElementById('install-trigger');
   const iosBtn     = document.getElementById('install-ios-open');
-
-  if (isAndroid()) {
-    if (iosBtn) iosBtn.hidden = true;
-  } else if (isIos()) {
-    if (androidBtn) androidBtn.hidden = true;
-  }
 
   // iOS modal handlers
   const iosModal   = document.getElementById('ios-modal');
