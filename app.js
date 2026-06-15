@@ -1253,8 +1253,6 @@ async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   try {
     // Force the browser to re-check the SW script on every app launch.
-    // Without this, the browser only checks for SW updates every ~24h or
-    // on a hard reload — which means a fresh deploy isn't detected.
     const reg = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
     // Explicitly ask the browser to look for a new SW right now
     try { await reg.update(); } catch (e) { /* offline — fine */ }
@@ -1268,7 +1266,10 @@ async function registerServiceWorker() {
       const newSw = reg.installing;
       if (!newSw) return;
       newSw.addEventListener('statechange', () => {
-        if (newSw.state === 'installed' && navigator.serviceWorker.controller) {
+        // Show the toast as soon as the new SW is installed, even on the
+        // very first load (no existing controller). The user just needs
+        // to refresh to use the new SW.
+        if (newSw.state === 'installed') {
           promptRefreshToUpdate(newSw);
         }
       });
@@ -1291,41 +1292,43 @@ async function registerServiceWorker() {
 }
 
 function promptRefreshToUpdate(sw) {
-  // Show a long toast. If the user clicks it OR the timeout fires,
-  // tell the SW to skip waiting and reload.
+  // Show a long-lived toast. When the user taps it, we tell the SW to
+  // skipWaiting; the controllerchange listener then reloads the page.
   let activated = false;
   const activate = () => {
     if (activated) return;
     activated = true;
-    if (sw) sw.postMessage({ type: 'SKIP_WAITING' });
-    // The controllerchange listener will reload once the SW swap completes.
+    if (sw) {
+      _userRequestedSWUpdate = true;  // tell controllerchange: yes, reload
+      sw.postMessage({ type: 'SKIP_WAITING' });
+    }
   };
-  // Use a long-duration toast for visibility
+
   const t = document.getElementById('toast');
   if (t) {
     t.textContent = 'Nouvelle version disponible — appuyez pour actualiser.';
     t.className = 'toast show';
     t.style.cursor = 'pointer';
     t.style.pointerEvents = 'auto';
-    t.onclick = () => { activate(); };
-    // Keep the toast visible until the user acts or the auto-activate fires
+    t.onclick = () => activate();
     if (toastTimer) clearTimeout(toastTimer);
   }
-  // Auto-activate after 8 seconds
-  setTimeout(() => {
-    if (!activated) activate();
-  }, 8000);
+  // No auto-activate — let the user decide when to update
 }
 
-// When the new SW takes over, the page is no longer controlled by the old one.
-// Reload automatically so the user sees the latest version (even if they
-// ignored the toast). Add a small delay so the user sees the toast for a
-// moment before the reload kicks in.
+// When the new SW takes over (because the user clicked the toast and we
+// sent SKIP_WAITING), the page is no longer controlled by the old one.
+// We reload to pick up the new controller. But this ONLY happens when the
+// user explicitly asked to update — not automatically.
 let _reloadingOnSWChange = false;
+let _userRequestedSWUpdate = false;  // set when the user taps the toast
 navigator.serviceWorker && navigator.serviceWorker.addEventListener('controllerchange', () => {
   if (_reloadingOnSWChange) return;
-  _reloadingOnSWChange = true;
-  setTimeout(() => window.location.reload(), 1500);
+  // Only auto-reload if the user clicked the toast (i.e. we sent SKIP_WAITING).
+  if (_userRequestedSWUpdate) {
+    _reloadingOnSWChange = true;
+    setTimeout(() => window.location.reload(), 300);
+  }
 });
 
 async function maybeSubscribePush(reg, vapidPublicKey) {
