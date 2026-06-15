@@ -6,7 +6,7 @@
      3. Notification click → open the app
    ============================================================ */
 
-const CACHE_NAME = 'milieuxlab-v1';
+const CACHE_NAME = 'milieuxlab-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -34,6 +34,13 @@ self.addEventListener('activate', (event) => {
     )
   );
   self.clients.claim();
+});
+
+/* --- Message: client asks us to take over immediately --- */
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 /* --- Fetch: cache-first for app shell, network-first for everything else --- */

@@ -1250,6 +1250,24 @@ async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   try {
     const reg = await navigator.serviceWorker.register('./sw.js');
+
+    // If a new SW is waiting to take over, show a toast prompting the user
+    // to refresh. This is what fixes the "I refreshed and nothing changed"
+    // problem — the new SW is registered but won't activate until either
+    // (a) all tabs are closed, or (b) we tell it to skip waiting.
+    if (reg.waiting) {
+      promptRefreshToUpdate(reg.waiting);
+    }
+    reg.addEventListener('updatefound', () => {
+      const newSw = reg.installing;
+      if (!newSw) return;
+      newSw.addEventListener('statechange', () => {
+        if (newSw.state === 'installed' && navigator.serviceWorker.controller) {
+          promptRefreshToUpdate(newSw);
+        }
+      });
+    });
+
     // Fetch the VAPID public key from the server (avoids bundling a key in the client)
     let vapidKey = '';
     try {
@@ -1264,6 +1282,35 @@ async function registerServiceWorker() {
   } catch (e) {
     console.warn('Service worker registration failed:', e);
   }
+}
+
+function promptRefreshToUpdate(sw) {
+  // Show a 6-second toast. If the user clicks it OR the timeout fires,
+  // tell the SW to skip waiting and reload.
+  let activated = false;
+  const activate = () => {
+    if (activated) return;
+    activated = true;
+    if (sw) sw.postMessage({ type: 'SKIP_WAITING' });
+  };
+  // Use a long-duration toast for visibility
+  if (typeof toast === 'function') {
+    const t = document.getElementById('toast');
+    if (t) {
+      t.textContent = 'Nouvelle version disponible — appuyez pour actualiser.';
+      t.className = 'toast show';
+      t.style.cursor = 'pointer';
+      t.style.pointerEvents = 'auto';
+      t.onclick = () => { activate(); window.location.reload(); };
+    }
+  }
+  // Auto-activate after 6s
+  setTimeout(() => {
+    if (!activated) {
+      activate();
+      window.location.reload();
+    }
+  }, 6000);
 }
 
 async function maybeSubscribePush(reg, vapidPublicKey) {
