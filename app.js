@@ -1290,42 +1290,41 @@ async function registerServiceWorker() {
 }
 
 function promptRefreshToUpdate(sw) {
-  // Show a 6-second toast. If the user clicks it OR the timeout fires,
+  // Show a long toast. If the user clicks it OR the timeout fires,
   // tell the SW to skip waiting and reload.
   let activated = false;
   const activate = () => {
     if (activated) return;
     activated = true;
     if (sw) sw.postMessage({ type: 'SKIP_WAITING' });
+    // The controllerchange listener will reload once the SW swap completes.
   };
   // Use a long-duration toast for visibility
-  if (typeof toast === 'function') {
-    const t = document.getElementById('toast');
-    if (t) {
-      t.textContent = 'Nouvelle version disponible — appuyez pour actualiser.';
-      t.className = 'toast show';
-      t.style.cursor = 'pointer';
-      t.style.pointerEvents = 'auto';
-      t.onclick = () => { activate(); window.location.reload(); };
-    }
+  const t = document.getElementById('toast');
+  if (t) {
+    t.textContent = 'Nouvelle version disponible — appuyez pour actualiser.';
+    t.className = 'toast show';
+    t.style.cursor = 'pointer';
+    t.style.pointerEvents = 'auto';
+    t.onclick = () => { activate(); };
+    // Keep the toast visible until the user acts or the auto-activate fires
+    if (toastTimer) clearTimeout(toastTimer);
   }
-  // Auto-activate after 6s
+  // Auto-activate after 8 seconds
   setTimeout(() => {
-    if (!activated) {
-      activate();
-      window.location.reload();
-    }
-  }, 6000);
+    if (!activated) activate();
+  }, 8000);
 }
 
 // When the new SW takes over, the page is no longer controlled by the old one.
 // Reload automatically so the user sees the latest version (even if they
-// ignored the toast).
+// ignored the toast). Add a small delay so the user sees the toast for a
+// moment before the reload kicks in.
 let _reloadingOnSWChange = false;
 navigator.serviceWorker && navigator.serviceWorker.addEventListener('controllerchange', () => {
   if (_reloadingOnSWChange) return;
   _reloadingOnSWChange = true;
-  window.location.reload();
+  setTimeout(() => window.location.reload(), 1500);
 });
 
 async function maybeSubscribePush(reg, vapidPublicKey) {
