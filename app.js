@@ -633,12 +633,12 @@ function fireBrowserNotification(alerts) {
    ============================================================ */
 
 let toastTimer;
-function toast(msg, type = '') {
+function toast(msg, type = '', durationMs = 2400) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className = 'toast show ' + type;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.className = 'toast ' + type; }, 2400);
+  toastTimer = setTimeout(() => { t.className = 'toast ' + type; }, durationMs);
 }
 
 function confirmAction(title, text, onOk) {
@@ -990,15 +990,19 @@ function init() {
   document.getElementById('pdf-cancel').addEventListener('click', closePdfFilters);
   document.getElementById('pdf-generate').addEventListener('click', startPdfExport);
 
-  // Initial render
-  renderDashboard();
+  // Initial render — only when the app is reachable (i.e. NOT in browser tab).
+  // The install gate hides the .app via CSS, but we also skip the render so
+  // nothing happens behind the gate (e.g. no alerts poller, no batch reads).
+  if (!document.body.classList.contains('has-install-gate')) {
+    renderDashboard();
+  }
 
-  // Browser notifications on load
-  const alerts = computeTodaysAlerts();
-  // Only fire an OS notification on load if the user is NOT looking at the tab
-  // (otherwise the in-app banner handles it; firing both would be redundant).
-  if (alerts.length > 0 && document.hidden) fireBrowserNotification(alerts);
-  startNotificationPoller();
+  // Browser notifications on load (also gated)
+  if (!document.body.classList.contains('has-install-gate')) {
+    const alerts = computeTodaysAlerts();
+    if (alerts.length > 0 && document.hidden) fireBrowserNotification(alerts);
+    startNotificationPoller();
+  }
 
   // PWA install gate (blocks the app in regular browser tabs)
   setupInstallGate();
@@ -1094,7 +1098,21 @@ function isIos() {
 function isAndroid() { return /android/i.test(window.navigator.userAgent); }
 
 function setupInstallGate() {
-  if (isInstalledPWA()) return; // already installed — let the app run
+  // If the user is already running the installed PWA, show a one-time
+  // welcome toast and let the app run normally.
+  if (isInstalledPWA()) {
+    const WELCOME_KEY = 'milieuxlab.welcomed.v1';
+    if (!localStorage.getItem(WELCOME_KEY)) {
+      localStorage.setItem(WELCOME_KEY, '1');
+      // Defer the toast until after init() registers the toast element
+      setTimeout(() => {
+        if (typeof toast === 'function') {
+          toast('Application installée — retrouvez MilieuXlab sur votre écran d\'accueil.', 'success', 4500);
+        }
+      }, 600);
+    }
+    return;
+  }
 
   const gate = document.getElementById('install-gate');
   if (!gate) return;
