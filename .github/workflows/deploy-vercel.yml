@@ -9,6 +9,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Opt into Node 24 on the GitHub Actions runner.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 concurrency:
   group: deploy-vercel
   cancel-in-progress: false

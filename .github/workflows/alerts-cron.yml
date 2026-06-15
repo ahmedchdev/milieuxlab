@@ -15,6 +15,11 @@ on:
         required: false
         default: "https://milieuxlab.vercel.app"
 
+# Opt into Node 24 on the GitHub Actions runner (default becomes Node 24
+# on 2026-06-16; Node 20 is removed 2026-09-16).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 concurrency:
   # Don't pile up overlapping runs if one is slow
   group: alerts-cron
