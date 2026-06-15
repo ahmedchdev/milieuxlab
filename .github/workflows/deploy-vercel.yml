@@ -3,6 +3,15 @@ name: deploy-vercel
 # Every push to main triggers a production deployment via the Vercel CLI.
 # Vercel projects already auto-deploy on push if you connect the GitHub
 # app, but this gives us a manual fallback and full control.
+#
+# DISABLED BY DEFAULT: the recommended way to deploy is to connect the
+# GitHub repo to your Vercel project in the Vercel dashboard
+# (vercel.com → your project → Settings → Git → Connect). That gives
+# auto-deploys on push without any secrets, no CLI, no workflow.
+#
+# If you want to use THIS workflow instead (e.g. to deploy to multiple
+# Vercel projects from one repo), set the VERCEL_TOKEN secret and remove
+# the `if: false` line below.
 
 on:
   push:
@@ -19,6 +28,9 @@ concurrency:
 
 jobs:
   deploy:
+    # Set to `if: false` to disable this workflow. Re-enable by changing to
+    # `if: true` once you've added the VERCEL_TOKEN repo secret.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
