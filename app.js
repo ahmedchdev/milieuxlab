@@ -1408,14 +1408,21 @@ function batchesSterileOnDate(date) {
 
 function worstStatusForDate(date) {
   // Determines the most critical status affecting a date
+  const today = startOfDay(new Date()).getTime();
+  const target = startOfDay(date).getTime();
+  const isPast = target < today;
+
   const renewing = batchesOnDate(date);
   const expiring = batchesExpiringOnDate(date);
-  if (expiring.length > 0) return 'expired';
+  // Expiration is only marked as "expired" once we've actually passed
+  // that day. On the day-of, it's just a normal renewal reminder.
+  if (expiring.length > 0 && isPast) return 'expired';
+  // Any renewal on or before today (urgent) or upcoming (soon) → red
   for (const { batch } of renewing) {
     const s = batchStatus(batch);
-    if (s.code === 'urgent') return 'urgent';
+    if (s.code === 'urgent' || s.code === 'soon') return 'urgent';
   }
-  if (renewing.length > 0) return 'soon';
+  if (renewing.length > 0) return 'urgent';
   if (batchesFertileOnDate(date).length > 0) return 'fert';
   if (batchesSterileOnDate(date).length > 0) return 'ster';
   return null;
@@ -1463,7 +1470,6 @@ function renderCalendar() {
     const status = worstStatusForDate(date);
     if (status === 'expired') el.classList.add('cal-expired');
     else if (status === 'urgent') el.classList.add('cal-urgent');
-    else if (status === 'soon') el.classList.add('cal-soon');
 
     // Dots: renewal (urgent = red, soon = blue, ok = green), expiry (orange), fertility/sterility (small grey)
     const dots = document.createElement('div');
@@ -1476,9 +1482,12 @@ function renderCalendar() {
     let worst = 'ok';
     for (const { batch } of renewing) {
       const s = batchStatus(batch);
-      if (s.code === 'urgent') { worst = 'urgent'; break; }
+      if (s.code === 'urgent' || s.code === 'soon') { worst = 'urgent'; break; }
     }
-    if (expiring.length > 0) worst = 'expired';
+    // Only show expired dot if the day is in the past
+    if (expiring.length > 0 && startOfDay(date).getTime() < today.getTime()) {
+      worst = 'expired';
+    }
     const dot = document.createElement('i');
     dot.className = 'cal-dot dot-' + worst;
     dots.appendChild(dot);

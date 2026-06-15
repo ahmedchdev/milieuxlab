@@ -2005,7 +2005,6 @@ body.has-install-gate .app { display: none; }
 
 .cal-day.cal-urgent   { background: color-mix(in oklab, var(--danger), transparent 88%); border-color: color-mix(in oklab, var(--danger), transparent 50%); }
 .cal-day.cal-urgent.cal-today { box-shadow: 0 0 0 2px color-mix(in oklab, var(--danger), transparent 40%); }
-.cal-day.cal-soon     { background: color-mix(in oklab, var(--accent), transparent 90%); }
 .cal-day.cal-expired  { background: color-mix(in oklab, var(--warn), transparent 88%); }
 
 .calendar-legend {
@@ -2028,7 +2027,6 @@ body.has-install-gate .app { display: none; }
   display: inline-block;
 }
 .legend-ok      i { background: var(--success); }
-.legend-soon    i { background: var(--accent); }
 .legend-urgent  i { background: var(--danger); }
 .legend-expired i { background: var(--warn); }
 
