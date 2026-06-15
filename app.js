@@ -1098,13 +1098,21 @@ function isIos() {
 function isAndroid() { return /android/i.test(window.navigator.userAgent); }
 
 function setupInstallGate() {
-  // If the user is already running the installed PWA, show a one-time
-  // welcome toast and let the app run normally.
+  // RULE: the dashboard MUST only render in the installed PWA.
+  // In a regular browser tab, we always show the install gate and hide
+  // the dashboard, regardless of whether the user has installed the app
+  // on this device before. They should use the home screen icon, not
+  // the browser tab.
+  const gate = document.getElementById('install-gate');
+  if (!gate) return;
+
   if (isInstalledPWA()) {
+    // We are running inside the installed PWA (standalone display mode).
+    // Show a one-time welcome toast on first install. The dashboard is
+    // allowed to render normally.
     const WELCOME_KEY = 'milieuxlab.welcomed.v1';
     if (!localStorage.getItem(WELCOME_KEY)) {
       localStorage.setItem(WELCOME_KEY, '1');
-      // Defer the toast until after init() registers the toast element
       setTimeout(() => {
         if (typeof toast === 'function') {
           toast('Application installée — retrouvez MilieuXlab sur votre écran d\'accueil.', 'success', 4500);
@@ -1114,8 +1122,8 @@ function setupInstallGate() {
     return;
   }
 
-  const gate = document.getElementById('install-gate');
-  if (!gate) return;
+  // We are in a regular browser tab. Block the dashboard. The user must
+  // open the installed PWA from their home screen.
   gate.hidden = false;
   document.body.classList.add('has-install-gate');
 
@@ -1150,9 +1158,18 @@ function setupInstallGate() {
         _deferredInstallPrompt.prompt();
         try {
           const choice = await _deferredInstallPrompt.userChoice;
-          if (choice && choice.outcome === 'accepted') {
-            gate.hidden = true;
-            document.body.classList.remove('has-install-gate');
+          // Note: we do NOT hide the gate or remove `has-install-gate` here.
+          // The browser tab is still open and the user is still in Chrome —
+          // if we removed the gate, the dashboard would appear in the browser
+          // tab, which violates the rule "dashboard only in the installed app".
+          // The success modal handles the "you installed it" feedback; the
+          // gate stays visible so the user closes the browser and opens the
+          // app from the home screen.
+          if (choice && choice.outcome !== 'accepted') {
+            // User dismissed the install dialog — show a fallback toast
+            if (typeof toast === 'function') {
+              toast('Installation annulée.', '');
+            }
           }
         } catch (e) { /* user dismissed */ }
         _deferredInstallPrompt = null;
