@@ -841,7 +841,8 @@ function buildPdfDoc() {
   pdf.text(labName, M, 60, { size: 14, bold: true });
   pdf.text('Planning de renouvellement', PW - M, 60, { size: 9, color: '#5A7A99', align: 'right' });
   pdf.text('Généré le ' + genDate, PW - M, 75, { size: 9, color: '#0A0E14', align: 'right' });
-  pdf.line(M, 90, PW - M, 90, { color: '#0A0E14', width: 1.5 });
+  // Divider sits a bit below the "Généré le ..." text, with breathing room
+  pdf.line(M, 100, PW - M, 100, { color: '#0A0E14', width: 1.5 });
 
   // ----- TITLE + SUBTITLE -----
   pdf.text('Planning de renouvellement des milieux de culture', M, 120, { size: 16, bold: true });
