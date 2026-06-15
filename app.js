@@ -204,7 +204,9 @@ function renderDashboard() {
   document.getElementById('stat-watch').textContent   = watch;
   document.getElementById('stat-urgent').textContent  = urgent;
   document.getElementById('stat-expired').textContent = expired;
-  document.getElementById('header-count').textContent = state.batches.length;
+  // Total batch count is no longer shown in the header (replaced by the
+  // calendar button), but we still keep state.batches.length available
+  // via the dashboard subtitle.
 
   document.getElementById('today-label').textContent = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   document.getElementById('batches-count').textContent = state.batches.length + ' au total';
@@ -261,11 +263,22 @@ function renderDashboard() {
     list.innerHTML = sorted.map(renderBatchCard).join('');
   }
 
-  // Header dot state
-  const dot = document.getElementById('header-dot');
-  dot.className = 'dot ' + (urgent > 0 ? 'dot-urgent' : expired > 0 ? 'dot-amber' : 'dot-ok');
-  dot.style.background = urgent > 0 ? 'var(--red)' : expired > 0 ? 'var(--amber)' : 'var(--green)';
-  dot.style.boxShadow = urgent > 0 ? '0 0 10px var(--red)' : expired > 0 ? '0 0 10px var(--amber)' : '0 0 10px var(--green)';
+  // Calendar badge: count of urgent batches
+  const badge = document.getElementById('calendar-badge');
+  if (badge) {
+    if (urgent > 0) {
+      badge.hidden = false;
+      badge.textContent = String(urgent);
+    } else {
+      badge.hidden = true;
+    }
+  }
+
+  // Refresh the calendar view if it's open, so the dots/coloring stay current
+  const calModal = document.getElementById('calendar-modal');
+  if (calModal && !calModal.classList.contains('hidden')) {
+    renderCalendar();
+  }
 }
 
 function renderBatchCard(batch) {
@@ -990,6 +1003,22 @@ function init() {
   document.getElementById('pdf-cancel').addEventListener('click', closePdfFilters);
   document.getElementById('pdf-generate').addEventListener('click', startPdfExport);
 
+  // Calendar
+  const calBtn = document.getElementById('btn-calendar');
+  if (calBtn) calBtn.addEventListener('click', openCalendar);
+  const calClose = document.getElementById('calendar-close');
+  if (calClose) calClose.addEventListener('click', closeCalendar);
+  const calPrev = document.getElementById('calendar-prev');
+  if (calPrev) calPrev.addEventListener('click', () => shiftCalendarMonth(-1));
+  const calNext = document.getElementById('calendar-next');
+  if (calNext) calNext.addEventListener('click', () => shiftCalendarMonth(1));
+  const calModal = document.getElementById('calendar-modal');
+  if (calModal) calModal.addEventListener('click', (e) => { if (e.target === calModal) closeCalendar(); });
+  const dayClose = document.getElementById('day-details-close');
+  if (dayClose) dayClose.addEventListener('click', closeDayDetails);
+  const dayModal = document.getElementById('day-details-modal');
+  if (dayModal) dayModal.addEventListener('click', (e) => { if (e.target === dayModal) closeDayDetails(); });
+
   // Initial render — only when the app is reachable (i.e. NOT in browser tab).
   // The install gate hides the .app via CSS, but we also skip the render so
   // nothing happens behind the gate (e.g. no alerts poller, no batch reads).
@@ -1272,6 +1301,335 @@ function urlBase64ToUint8Array(base64String) {
   const out = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
   return out;
+}
+
+/* ============================================================
+   CALENDAR — month view of renewal dates, click a day for details
+   ============================================================ */
+
+let _calCursor = null;  // first day of the month currently displayed
+
+function openCalendar() {
+  const modal = document.getElementById('calendar-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  if (!_calCursor) _calCursor = startOfDay(new Date());
+  _calCursor.setDate(1);  // first of current month
+  renderCalendar();
+}
+
+function closeCalendar() {
+  const modal = document.getElementById('calendar-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function shiftCalendarMonth(delta) {
+  if (!_calCursor) _calCursor = startOfDay(new Date());
+  _calCursor = new Date(_calCursor.getFullYear(), _calCursor.getMonth() + delta, 1);
+  renderCalendar();
+}
+
+function batchesOnDate(date) {
+  // Returns batches whose RENEWAL date falls on `date`
+  const target = startOfDay(date).getTime();
+  return state.batches
+    .map(b => ({ batch: b, medium: getBatchMedium(b) }))
+    .filter(({ medium, batch }) => medium && startOfDay(new Date(batch.renewalAlertDate)).getTime() === target);
+}
+
+function batchesExpiringOnDate(date) {
+  // Also include batches whose EXPIRY date is on this day
+  const target = startOfDay(date).getTime();
+  return state.batches
+    .map(b => ({ batch: b, medium: getBatchMedium(b) }))
+    .filter(({ medium, batch }) => medium && startOfDay(new Date(batch.expiryDate)).getTime() === target);
+}
+
+function batchesFertileOnDate(date) {
+  const target = startOfDay(date).getTime();
+  return state.batches
+    .map(b => ({ batch: b, medium: getBatchMedium(b) }))
+    .filter(({ medium, batch }) => medium && startOfDay(new Date(batch.fertilityResultDate)).getTime() === target);
+}
+
+function batchesSterileOnDate(date) {
+  const target = startOfDay(date).getTime();
+  return state.batches
+    .map(b => ({ batch: b, medium: getBatchMedium(b) }))
+    .filter(({ medium, batch }) => medium && startOfDay(new Date(batch.sterilityResultDate)).getTime() === target);
+}
+
+function worstStatusForDate(date) {
+  // Determines the most critical status affecting a date
+  const renewing = batchesOnDate(date);
+  const expiring = batchesExpiringOnDate(date);
+  if (expiring.length > 0) return 'expired';
+  for (const { batch } of renewing) {
+    const s = batchStatus(batch);
+    if (s.code === 'urgent') return 'urgent';
+  }
+  if (renewing.length > 0) return 'soon';
+  if (batchesFertileOnDate(date).length > 0) return 'fert';
+  if (batchesSterileOnDate(date).length > 0) return 'ster';
+  return null;
+}
+
+function renderCalendar() {
+  const grid    = document.getElementById('calendar-grid');
+  const title   = document.getElementById('calendar-title');
+  if (!grid || !title) return;
+
+  const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const cursor = _calCursor;
+  title.textContent = `${monthNames[cursor.getMonth()]} ${cursor.getFullYear()}`;
+
+  const today = startOfDay(new Date());
+  const firstOfMonth = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  // Monday = 0 ... Sunday = 6
+  let firstWeekday = firstOfMonth.getDay() - 1;
+  if (firstWeekday < 0) firstWeekday = 6;
+  const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+  const daysInPrev = new Date(cursor.getFullYear(), cursor.getMonth(), 0).getDate();
+
+  grid.innerHTML = '';
+
+  // Leading days from previous month
+  for (let i = firstWeekday - 1; i >= 0; i--) {
+    const d = new Date(cursor.getFullYear(), cursor.getMonth() - 1, daysInPrev - i);
+    const el = document.createElement('div');
+    el.className = 'cal-day cal-out';
+    el.textContent = d.getDate();
+    grid.appendChild(el);
+  }
+
+  // Days of the month
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(cursor.getFullYear(), cursor.getMonth(), day);
+    const el = document.createElement('div');
+    el.className = 'cal-day';
+    el.textContent = day;
+
+    const isToday = startOfDay(date).getTime() === today.getTime();
+    if (isToday) el.classList.add('cal-today');
+
+    // Status coloring: based on the date itself
+    const status = worstStatusForDate(date);
+    if (status === 'expired') el.classList.add('cal-expired');
+    else if (status === 'urgent') el.classList.add('cal-urgent');
+    else if (status === 'soon') el.classList.add('cal-soon');
+
+    // Dots: renewal (urgent = red, soon = blue, ok = green), expiry (orange), fertility/sterility (small grey)
+    const dots = document.createElement('div');
+    dots.className = 'cal-dots';
+    const renewing = batchesOnDate(date);
+    const expiring = batchesExpiringOnDate(date);
+    const fertile  = batchesFertileOnDate(date);
+    const sterile  = batchesSterileOnDate(date);
+
+    let worst = 'ok';
+    for (const { batch } of renewing) {
+      const s = batchStatus(batch);
+      if (s.code === 'urgent') { worst = 'urgent'; break; }
+    }
+    if (expiring.length > 0) worst = 'expired';
+    const dot = document.createElement('i');
+    dot.className = 'cal-dot dot-' + worst;
+    dots.appendChild(dot);
+
+    if (fertile.length > 0) {
+      const fd = document.createElement('i');
+      fd.className = 'cal-dot';
+      fd.style.background = 'var(--muted)';
+      dots.appendChild(fd);
+    }
+    if (sterile.length > 0 && fertile.length === 0) {
+      const sd = document.createElement('i');
+      sd.className = 'cal-dot';
+      sd.style.background = 'var(--muted)';
+      dots.appendChild(sd);
+    }
+    if (dots.children.length > 0) el.appendChild(dots);
+
+    // Make clickable if anything is happening on this day
+    const total = renewing.length + expiring.length + fertile.length + sterile.length;
+    if (total > 0) {
+      el.classList.add('cal-clickable');
+      el.addEventListener('click', () => openDayDetails(date));
+    }
+
+    grid.appendChild(el);
+  }
+
+  // Trailing days to complete the last week
+  const totalCells = grid.children.length;
+  const trailing = (7 - (totalCells % 7)) % 7;
+  for (let i = 1; i <= trailing; i++) {
+    const d = new Date(cursor.getFullYear(), cursor.getMonth() + 1, i);
+    const el = document.createElement('div');
+    el.className = 'cal-day cal-out';
+    el.textContent = d.getDate();
+    grid.appendChild(el);
+  }
+}
+
+function openDayDetails(date) {
+  const modal = document.getElementById('day-details-modal');
+  const titleEl = document.getElementById('day-details-title');
+  const subEl   = document.getElementById('day-details-sub');
+  const list    = document.getElementById('day-details-list');
+  if (!modal || !list) return;
+
+  const renewing = batchesOnDate(date);
+  const expiring = batchesExpiringOnDate(date);
+  const fertile  = batchesFertileOnDate(date);
+  const sterile  = batchesSterileOnDate(date);
+
+  const opts = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+  titleEl.textContent = date.toLocaleDateString('fr-FR', opts);
+  const parts = [];
+  if (renewing.length) parts.push(`${renewing.length} renouvellement${renewing.length > 1 ? 's' : ''}`);
+  if (expiring.length) parts.push(`${expiring.length} expiration${expiring.length > 1 ? 's' : ''}`);
+  if (fertile.length)  parts.push(`${fertile.length} résultat${fertile.length > 1 ? 's' : ''} fertilité`);
+  if (sterile.length)  parts.push(`${sterile.length} résultat${sterile.length > 1 ? 's' : ''} stérilité`);
+  subEl.textContent = parts.length ? parts.join(' · ') : 'Aucun événement';
+
+  const items = [];
+
+  // Renewal items
+  renewing.forEach(({ batch, medium }) => {
+    if (!medium) return;
+    const s = batchStatus(batch);
+    const daysLeft = daysBetween(new Date(), batch.expiryDate);
+    const isBroth = medium.type === 'broth';
+    items.push(`
+      <div class="day-detail-item ${s.cls}">
+        <div class="day-detail-head">
+          <div>
+            <div class="day-detail-name">${escapeHtml(medium.name)}</div>
+            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+          </div>
+          <span class="day-detail-tag ${isBroth ? 'broth' : ''}">${isBroth ? 'BOUILLON' : 'SOLIDE'}</span>
+        </div>
+        <div class="day-detail-grid">
+          <div>
+            <span class="lbl">Préparation</span>
+            <span class="val">${fmtDateTime(batch.prepDateTime)}</span>
+          </div>
+          <div>
+            <span class="lbl">Expiration</span>
+            <span class="val ${s.code === 'urgent' ? 'alert-red' : daysLeft <= 7 ? 'alert' : ''}">${fmtDate(batch.expiryDate)}</span>
+          </div>
+          <div>
+            <span class="lbl">Renouvellement</span>
+            <span class="val">${fmtDate(batch.renewalAlertDate)}</span>
+          </div>
+          <div>
+            <span class="lbl">Jours restants</span>
+            <span class="val">${daysLeft < 0 ? 'Expiré' : daysLeft + ' j'}</span>
+          </div>
+        </div>
+        <div class="day-detail-status">
+          <span class="status-dot ${s.code === 'urgent' ? 'danger' : s.code === 'soon' ? 'warn' : s.code === 'expired' ? 'grey' : ''}"></span>
+          <span>${escapeHtml(s.label)}</span>
+        </div>
+      </div>
+    `);
+  });
+
+  // Expiry items
+  expiring.forEach(({ batch, medium }) => {
+    if (!medium) return;
+    if (renewing.find(r => r.batch.id === batch.id)) return; // already shown
+    const isBroth = medium.type === 'broth';
+    items.push(`
+      <div class="day-detail-item s-red">
+        <div class="day-detail-head">
+          <div>
+            <div class="day-detail-name">${escapeHtml(medium.name)}</div>
+            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+          </div>
+          <span class="day-detail-tag ${isBroth ? 'broth' : ''}">EXPIRE</span>
+        </div>
+        <div class="day-detail-grid">
+          <div>
+            <span class="lbl">Préparation</span>
+            <span class="val">${fmtDateTime(batch.prepDateTime)}</span>
+          </div>
+          <div>
+            <span class="lbl">Expiration</span>
+            <span class="val alert-red">${fmtDate(batch.expiryDate)}</span>
+          </div>
+        </div>
+      </div>
+    `);
+  });
+
+  // Fertility result
+  fertile.forEach(({ batch, medium }) => {
+    if (!medium) return;
+    const isBroth = medium.type === 'broth';
+    items.push(`
+      <div class="day-detail-item">
+        <div class="day-detail-head">
+          <div>
+            <div class="day-detail-name">${escapeHtml(medium.name)}</div>
+            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+          </div>
+          <span class="day-detail-tag ${isBroth ? 'broth' : ''}">FERTILITÉ</span>
+        </div>
+        <div class="day-detail-grid">
+          <div>
+            <span class="lbl">Préparation</span>
+            <span class="val">${fmtDateTime(batch.prepDateTime)}</span>
+          </div>
+          <div>
+            <span class="lbl">Expiration</span>
+            <span class="val">${fmtDate(batch.expiryDate)}</span>
+          </div>
+        </div>
+      </div>
+    `);
+  });
+
+  // Sterility result
+  sterile.forEach(({ batch, medium }) => {
+    if (!medium) return;
+    const isBroth = medium.type === 'broth';
+    items.push(`
+      <div class="day-detail-item">
+        <div class="day-detail-head">
+          <div>
+            <div class="day-detail-name">${escapeHtml(medium.name)}</div>
+            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+          </div>
+          <span class="day-detail-tag ${isBroth ? 'broth' : ''}">STÉRILITÉ</span>
+        </div>
+        <div class="day-detail-grid">
+          <div>
+            <span class="lbl">Préparation</span>
+            <span class="val">${fmtDateTime(batch.prepDateTime)}</span>
+          </div>
+          <div>
+            <span class="lbl">Stérilité</span>
+            <span class="val">${fmtDateTime(batch.sterilityResultDate)}</span>
+          </div>
+        </div>
+      </div>
+    `);
+  });
+
+  if (items.length === 0) {
+    list.innerHTML = `<div class="day-detail-empty">Aucun lot enregistré pour cette date.</div>`;
+  } else {
+    list.innerHTML = items.join('');
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeDayDetails() {
+  const modal = document.getElementById('day-details-modal');
+  if (modal) modal.classList.add('hidden');
 }
 
 document.addEventListener('DOMContentLoaded', init);

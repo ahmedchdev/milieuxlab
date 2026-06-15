@@ -205,10 +205,15 @@
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
           </svg>
         </button>
-        <div class="header-stats">
-          <span class="dot dot-ok" id="header-dot"></span>
-          <span class="header-count" id="header-count">0</span>
-        </div>
+        <button class="calendar-toggle" id="btn-calendar" type="button" aria-label="Ouvrir le calendrier des renouvellements" title="Calendrier des renouvellements">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+            <span class="calendar-badge" id="calendar-badge" hidden>0</span>
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -552,6 +557,57 @@
         <button class="btn btn-ghost" id="confirm-cancel">Annuler</button>
         <button class="btn btn-danger" id="confirm-ok">Confirmer</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Calendar modal — shows the month with renewal dates colorized,
+       click a day to see all batches renewing then -->
+  <div id="calendar-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="calendar-title">
+    <div class="modal-card calendar-card">
+      <button class="ios-modal-close" id="calendar-close" type="button" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <div class="calendar-head">
+        <button class="calendar-nav" id="calendar-prev" type="button" aria-label="Mois précédent">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <h3 class="calendar-title" id="calendar-title">—</h3>
+        <button class="calendar-nav" id="calendar-next" type="button" aria-label="Mois suivant">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
+      <div class="calendar-weekdays">
+        <span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span>
+      </div>
+      <div class="calendar-grid" id="calendar-grid"></div>
+      <div class="calendar-legend">
+        <span class="legend-item legend-ok"><i></i>Conforme</span>
+        <span class="legend-item legend-soon"><i></i>Bientôt</span>
+        <span class="legend-item legend-urgent"><i></i>Renouvellement</span>
+        <span class="legend-item legend-expired"><i></i>Expiré</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Day details modal — shown when user clicks a day in the calendar -->
+  <div id="day-details-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="day-details-title">
+    <div class="modal-card day-details-card">
+      <button class="ios-modal-close" id="day-details-close" type="button" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <h3 class="day-details-title" id="day-details-title">—</h3>
+      <p class="day-details-sub" id="day-details-sub">—</p>
+      <div class="day-details-list" id="day-details-list"></div>
     </div>
   </div>
 
