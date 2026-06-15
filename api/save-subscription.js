@@ -1,18 +1,18 @@
 // /api/save-subscription
-// Receives a push subscription + batch state from a PWA client and stores
-// it in Vercel KV. Also returns the public VAPID key the client needs to
-// subscribe.
+// Receives a Web Push subscription + batch state from a PWA client and
+// stores it in Upstash Redis.
 //
-// Request body: { subscription: PushSubscription, batches: [...], media: [...] }
-//
-// Required env vars (set in Vercel dashboard):
-//   KV_REST_API_URL          — from Vercel KV integration
-//   KV_REST_API_TOKEN        — from Vercel KV integration
-//   VAPID_PUBLIC_KEY         — `npx web-push generate-vapid-keys` then set
-//   VAPID_PRIVATE_KEY        — same
-//   VAPID_SUBJECT            — mailto:you@example.com
+// Required env vars:
+//   UPSTASH_REDIS_REST_URL
+//   UPSTASH_REDIS_REST_TOKEN
+//   VAPID_PUBLIC_KEY (returned in response so the client doesn't need to fetch separately)
 
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -25,12 +25,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing subscription' });
   }
 
-  // Identify the device by endpoint hash — each browser/device gets one entry.
-  // The user can have multiple devices (phone + laptop).
+  // Identify the device by endpoint hash — each browser/device gets one entry
   const id = 'sub:' + Buffer.from(subscription.endpoint).toString('base64url').slice(0, 40);
 
   try {
-    await kv.set(id, {
+    await redis.set(id, {
       subscription,
       batches,
       media,
@@ -43,6 +42,6 @@ export default async function handler(req, res) {
     });
   } catch (e) {
     console.error('save-subscription failed:', e);
-    return res.status(500).json({ error: 'Storage error' });
+    return res.status(500).json({ error: 'Storage error', detail: e.message });
   }
 }

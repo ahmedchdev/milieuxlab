@@ -1,22 +1,25 @@
 // /api/cron-check-alerts
-// Vercel Cron hits this every 5 minutes. It:
-//   1. Lists all push subscriptions stored in Vercel KV
-//   2. Re-evaluates batch status for each (using the same logic as the client)
-//   3. Sends a Web Push to devices whose alert set has changed
+// Called every 5 minutes by .github/workflows/alerts-cron.yml.
+// Re-evaluates batch status for each device's stored state, and sends
+// a Web Push to any device whose alert set has changed.
 //
-// Auth: Vercel sets `req.headers.authorization: Bearer <CRON_SECRET>` automatically.
-// We don't enforce that here for simplicity, but the route is unguessable in production
-// and you can add a secret check via Vercel env.
-//
-// Required env vars (set in Vercel dashboard):
-//   KV_REST_API_URL, KV_REST_API_TOKEN
+// Storage: Upstash Redis (via @upstash/redis), env vars:
+//   UPSTASH_REDIS_REST_URL
+//   UPSTASH_REDIS_REST_TOKEN
 //   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY
-//   VAPID_SUBJECT  (e.g. "mailto:you@example.com")
+//   VAPID_SUBJECT
 
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
 import webpush from 'web-push';
 
-// Configure web-push with VAPID keys
+const BUFFER_DAYS = 2;
+const SHELF_LIFE = { solid: 30, broth: 15 };
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
+
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(
     process.env.VAPID_SUBJECT || 'mailto:admin@example.com',
@@ -24,9 +27,6 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     process.env.VAPID_PRIVATE_KEY
   );
 }
-
-const BUFFER_DAYS = 2;
-const SHELF_LIFE = { solid: 30, broth: 15 };
 
 function startOfDay(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
@@ -68,7 +68,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Optional: gate the cron endpoint with a secret
   if (process.env.CRON_SECRET) {
     const auth = req.headers.authorization || '';
     if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -79,55 +78,49 @@ export default async function handler(req, res) {
   if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
     return res.status(500).json({ error: 'VAPID keys not configured' });
   }
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    return res.status(500).json({ error: 'Upstash Redis not configured' });
+  }
 
-  let sent = 0, skipped = 0, errors = 0;
-  let cursor = 0;
-  const limit = 100;
+  let sent = 0, skipped = 0, errors = 0, scanned = 0;
 
   try {
-    // Scan all subscription keys (we use kv.scan for production; for free-tier KV
-    // there is no scan — fall back to a known index list if needed)
-    do {
-      const result = await kv.scan(cursor, { match: 'sub:*', count: limit });
-      const keys = result.keys || [];
-      cursor = Number(result.cursor) || 0;
+    // Get all subscription keys (we use * since we don't expect many)
+    const keys = await redis.keys('sub:*');
+    scanned = Array.isArray(keys) ? keys.length : 0;
 
-      for (const key of keys) {
-        const entry = await kv.get(key);
-        if (!entry) continue;
-        const fresh = computeAlerts(entry.batches || []);
-        const sig = alertSignature(fresh);
-        if (sig === entry._lastSig) { skipped++; continue; }
-        if (fresh.length === 0) {
-          // No more alerts — update the signature so we don't re-notify
-          await kv.set(key, { ...entry, _lastSig: sig });
-          skipped++;
-          continue;
-        }
-        // Send a push
-        try {
-          await webpush.sendNotification(entry.subscription, JSON.stringify({
-            title: `MilieuXlab — ${fresh.length} alerte${fresh.length > 1 ? 's' : ''}`,
-            body: fresh.slice(0, 3).map(a => `• ${a.msg}`).join('\n'),
-            tag: 'milieuxlab-alert',
-            urgent: fresh.some(a => a.msg === 'Expiré' || a.msg === 'Renouvellement requis'),
-            url: './index.html#dashboard',
-          }));
-          await kv.set(key, { ...entry, _lastSig: sig });
-          sent++;
-        } catch (e) {
-          // 410 = subscription expired (user uninstalled or revoked)
-          if (e.statusCode === 410 || e.statusCode === 404) {
-            await kv.del(key);
-          }
-          errors++;
-        }
+    for (const key of keys) {
+      const entry = await redis.get(key);
+      if (!entry || typeof entry !== 'object') continue;
+      const fresh = computeAlerts(entry.batches || []);
+      const sig = alertSignature(fresh);
+      if (sig === entry._lastSig) { skipped++; continue; }
+      if (fresh.length === 0) {
+        await redis.set(key, { ...entry, _lastSig: sig });
+        skipped++;
+        continue;
       }
-    } while (cursor !== 0);
+      try {
+        await webpush.sendNotification(entry.subscription, JSON.stringify({
+          title: `MilieuXlab — ${fresh.length} alerte${fresh.length > 1 ? 's' : ''}`,
+          body: fresh.slice(0, 3).map(a => `• ${a.msg}`).join('\n'),
+          tag: 'milieuxlab-alert',
+          urgent: fresh.some(a => a.msg === 'Expiré' || a.msg === 'Renouvellement requis'),
+          url: './index.html#dashboard',
+        }));
+        await redis.set(key, { ...entry, _lastSig: sig });
+        sent++;
+      } catch (e) {
+        if (e.statusCode === 410 || e.statusCode === 404) {
+          await redis.del(key);
+        }
+        errors++;
+      }
+    }
   } catch (e) {
     console.error('cron-check-alerts failed:', e);
     return res.status(500).json({ error: 'Internal error', detail: e.message });
   }
 
-  return res.status(200).json({ ok: true, sent, skipped, errors, scanned: cursor });
+  return res.status(200).json({ ok: true, sent, skipped, errors, scanned });
 }
