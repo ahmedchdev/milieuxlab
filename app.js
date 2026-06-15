@@ -1249,15 +1249,18 @@ function setupInstallGate() {
 async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   try {
-    const reg = await navigator.serviceWorker.register('./sw.js');
+    // Force the browser to re-check the SW script on every app launch.
+    // Without this, the browser only checks for SW updates every ~24h or
+    // on a hard reload — which means a fresh deploy isn't detected.
+    const reg = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
+    // Explicitly ask the browser to look for a new SW right now
+    try { await reg.update(); } catch (e) { /* offline — fine */ }
 
-    // If a new SW is waiting to take over, show a toast prompting the user
-    // to refresh. This is what fixes the "I refreshed and nothing changed"
-    // problem — the new SW is registered but won't activate until either
-    // (a) all tabs are closed, or (b) we tell it to skip waiting.
+    // If a new SW is already waiting, show the refresh toast immediately
     if (reg.waiting) {
       promptRefreshToUpdate(reg.waiting);
     }
+    // Otherwise, watch for a new SW to install
     reg.addEventListener('updatefound', () => {
       const newSw = reg.installing;
       if (!newSw) return;
@@ -1312,6 +1315,16 @@ function promptRefreshToUpdate(sw) {
     }
   }, 6000);
 }
+
+// When the new SW takes over, the page is no longer controlled by the old one.
+// Reload automatically so the user sees the latest version (even if they
+// ignored the toast).
+let _reloadingOnSWChange = false;
+navigator.serviceWorker && navigator.serviceWorker.addEventListener('controllerchange', () => {
+  if (_reloadingOnSWChange) return;
+  _reloadingOnSWChange = true;
+  window.location.reload();
+});
 
 async function maybeSubscribePush(reg, vapidPublicKey) {
   if (!('PushManager' in window)) return;
