@@ -1172,10 +1172,30 @@ function setupInstallGate() {
     _deferredInstallPrompt = e;
   });
 
-  // After install, hide the gate and let the app run
+  // After install, show the success modal + register the SW.
+  // The `appinstalled` event fires only when the user actually accepts
+  // the native install dialog — so this is a reliable signal that the
+  // app is now on the home screen.
+  const successModal   = document.getElementById('install-success-modal');
+  const successClose   = document.getElementById('install-success-close');
+  const successOk      = document.getElementById('install-success-ok');
+  const dismissSuccess = () => { if (successModal) successModal.classList.add('hidden'); };
+  if (successClose) successClose.addEventListener('click', dismissSuccess);
+  if (successOk)    successOk.addEventListener('click', dismissSuccess);
+  if (successModal) {
+    successModal.addEventListener('click', (e) => {
+      if (e.target === successModal) dismissSuccess();
+    });
+  }
+
   window.addEventListener('appinstalled', () => {
-    gate.hidden = true;
-    document.body.classList.remove('has-install-gate');
+    // Keep the gate visible (don't hide it) — the modal explains what happened.
+    // Hiding the gate here would show the dashboard before the user closes
+    // the success modal, which is jarring.
+    if (successModal) {
+      successModal.classList.remove('hidden');
+    }
+    // Register the service worker in the background
     registerServiceWorker();
   });
 }

@@ -1785,5 +1785,75 @@ input[type="date"].field-input, input[type="time"].field-input { font-variant-nu
   margin-top: 0;
 }
 
+/* ============================================================
+   INSTALL-SUCCESS MODAL — confirms the user really installed
+   ============================================================ */
+
+.install-success-card {
+  position: relative;
+  max-width: 420px;
+  text-align: center;
+  padding: var(--space-6) var(--space-5) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.install-success-icon {
+  width: 72px; height: 72px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--success), transparent 85%);
+  color: var(--success);
+  margin: var(--space-2) 0;
+  box-shadow: 0 0 32px color-mix(in oklab, var(--success), transparent 70%);
+  animation: installSuccessPulse 1.6s ease-in-out infinite;
+}
+.install-success-icon svg { width: 36px; height: 36px; }
+@keyframes installSuccessPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 32px color-mix(in oklab, var(--success), transparent 70%); }
+  50%      { transform: scale(1.06); box-shadow: 0 0 48px color-mix(in oklab, var(--success), transparent 55%); }
+}
+
+.install-success-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--fg);
+}
+
+.install-success-sub {
+  font-size: var(--text-sm);
+  color: var(--fg-2);
+  margin: 0;
+  line-height: 1.5;
+  max-width: 320px;
+}
+
+.install-success-hint {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  line-height: 1.6;
+  max-width: 340px;
+}
+
+.install-success-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  margin-top: var(--space-3);
+  width: 100%;
+}
+.install-success-actions .btn { flex: 1; max-width: 240px; }
+
 /* When the install gate is active, hide the app */
 body.has-install-gate .app { display: none; }
