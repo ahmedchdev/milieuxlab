@@ -1,0 +1,23 @@
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Vercel
+.vercel
+.env
+.env.local
+.env.*.local
+
+# Test/debug artifacts
+test.js
+inspect.pdf
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp

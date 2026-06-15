@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "_comment": "Vercel Cron is NOT used here. The 5-min schedule is handled by .github/workflows/alerts-cron.yml which calls /api/cron-check-alerts directly. The Vercel Hobby tier caps cron at 2/day, while GitHub Actions gives us free unlimited cron."
+}

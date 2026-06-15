@@ -1,0 +1,1229 @@
+/* ============================================================
+   MilieuXlab — app.js
+   State · Calculations · Rendering · localStorage
+   ============================================================ */
+
+const STORAGE = {
+  BATCHES: 'milieuxlab.batches.v1',
+  MEDIA:   'milieuxlab.media.v1',
+  SETTINGS:'milieuxlab.settings.v1',
+};
+
+const BUFFER_DAYS = 2;
+const SHELF_LIFE = { solid: 30, broth: 15 };
+const THEME_KEY = 'milieuxlab.theme.v1';
+const NOTIF_POLL_MS = 5 * 60 * 1000;  // re-check every 5 minutes
+
+const DEFAULT_MEDIA = [
+  { id: 'm_tsa',       name: 'TSA',                          type: 'solid', strain: 'S. aureus ATCC 6538',         fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 5, isDefault: true },
+  { id: 'm_macconkey', name: 'MacConkey Agar',               type: 'solid', strain: 'E. coli ATCC 8739',           fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 72, isDefault: true },
+  { id: 'm_sabouraud', name: 'Sabouraud',                    type: 'solid', strain: 'C. albicans ATCC 10231',      fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 5, isDefault: true },
+  { id: 'm_mh',        name: 'Mueller-Hinton',               type: 'solid', strain: 'S. aureus ATCC 25923',        fertilityDelayDays: 3, sterilityFormat: 'days',  sterilityValue: 5, isDefault: true },
+  { id: 'm_tsb',       name: 'TSB (Tryptic Soy Broth)',      type: 'broth', strain: 'S. aureus ATCC 6538',         fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 14, isDefault: true },
+  { id: 'm_bhi',       name: 'BHI (Brain Heart Infusion)',   type: 'broth', strain: 'S. aureus ATCC 6538',         fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 14, isDefault: true },
+  { id: 'm_xld',       name: 'XLD Agar',                     type: 'solid', strain: 'Salmonella typhimurium',      fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 24, isDefault: true },
+  { id: 'm_pbs',       name: 'Phosphate Buffer Solution',   type: 'broth', strain: 'E. coli ATCC 8739',           fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 24, isDefault: true },
+];
+
+const DEFAULT_SETTINGS = { browserNotifications: false, showExpired: false, labName: '' };
+
+/* ============================================================
+   STATE
+   ============================================================ */
+
+const state = {
+  batches: [],
+  media: [],
+  settings: { ...DEFAULT_SETTINGS },
+  currentView: 'dashboard',
+};
+
+function loadState() {
+  try {
+    const m = localStorage.getItem(STORAGE.MEDIA);
+    state.media = m ? JSON.parse(m) : [...DEFAULT_MEDIA];
+    // Ensure all defaults are present (in case older storage)
+    DEFAULT_MEDIA.forEach(dm => {
+      if (!state.media.find(x => x.id === dm.id)) state.media.unshift(dm);
+    });
+
+    const b = localStorage.getItem(STORAGE.BATCHES);
+    state.batches = b ? JSON.parse(b) : [];
+
+    const s = localStorage.getItem(STORAGE.SETTINGS);
+    state.settings = s ? { ...DEFAULT_SETTINGS, ...JSON.parse(s) } : { ...DEFAULT_SETTINGS };
+  } catch (e) {
+    console.error('Failed to load state', e);
+    state.media = [...DEFAULT_MEDIA];
+    state.batches = [];
+    state.settings = { ...DEFAULT_SETTINGS };
+  }
+}
+
+function persist() {
+  localStorage.setItem(STORAGE.MEDIA, JSON.stringify(state.media));
+  localStorage.setItem(STORAGE.BATCHES, JSON.stringify(state.batches));
+  localStorage.setItem(STORAGE.SETTINGS, JSON.stringify(state.settings));
+}
+
+/* ============================================================
+   CALCULATIONS
+   ============================================================ */
+
+function startOfDay(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function addDays(d, days) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + days);
+  return x;
+}
+
+function addHours(d, hours) {
+  const x = new Date(d);
+  x.setHours(x.getHours() + hours);
+  return x;
+}
+
+function getSterilityDurationMs(medium) {
+  if (medium.sterilityFormat === 'days')  return medium.sterilityValue * 24 * 60 * 60 * 1000;
+  if (medium.sterilityFormat === 'hours') return medium.sterilityValue * 60 * 60 * 1000;
+  if (medium.sterilityFormat === 'range') return medium.sterilityMaxHours * 60 * 60 * 1000;
+  return 0;
+}
+
+function computeBatchDates(medium, prepDateTime) {
+  const prep = new Date(prepDateTime);
+  const fertilityResult = addDays(prep, medium.fertilityDelayDays);
+  const sterilityResult = addHours(prep, getSterilityDurationHours(medium));
+  const expiry = addDays(startOfDay(prep), SHELF_LIFE[medium.type]);
+  const renewalAlert = addDays(startOfDay(expiry), -(medium.fertilityDelayDays + BUFFER_DAYS));
+  return { fertilityResult, sterilityResult, expiry, renewalAlert };
+}
+
+function getSterilityDurationHours(medium) {
+  if (medium.sterilityFormat === 'days')  return medium.sterilityValue * 24;
+  if (medium.sterilityFormat === 'hours') return medium.sterilityValue;
+  if (medium.sterilityFormat === 'range') return medium.sterilityMaxHours;
+  return 0;
+}
+
+function getSterilityDisplay(medium) {
+  if (medium.sterilityFormat === 'days')  return `${medium.sterilityValue} j`;
+  if (medium.sterilityFormat === 'hours') return `${medium.sterilityValue} h`;
+  if (medium.sterilityFormat === 'range') return `${medium.sterilityMinHours}h – ${medium.sterilityMaxHours}h`;
+  return '—';
+}
+
+/* ============================================================
+   FORMATTERS
+   ============================================================ */
+
+const fmtDate = d => {
+  const x = new Date(d);
+  const dd = String(x.getDate()).padStart(2, '0');
+  const mm = String(x.getMonth() + 1).padStart(2, '0');
+  const yy = x.getFullYear();
+  return `${dd}/${mm}/${yy}`;
+};
+const fmtDateTime = d => {
+  const x = new Date(d);
+  const hh = String(x.getHours()).padStart(2, '0');
+  const mn = String(x.getMinutes()).padStart(2, '0');
+  return `${fmtDate(x)} ${hh}:${mn}`;
+};
+const fmtTime = d => {
+  const x = new Date(d);
+  return `${String(x.getHours()).padStart(2,'0')}:${String(x.getMinutes()).padStart(2,'0')}`;
+};
+const fmtRelativeDays = days => {
+  if (days === 0) return "aujourd'hui";
+  if (days > 0)   return `dans ${days} jour${days > 1 ? 's' : ''}`;
+  return `il y a ${Math.abs(days)} jour${Math.abs(days) > 1 ? 's' : ''}`;
+};
+
+const isSameDay = (a, b) => {
+  const x = new Date(a), y = new Date(b);
+  return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate();
+};
+
+const daysBetween = (a, b) => {
+  const ms = startOfDay(b) - startOfDay(a);
+  return Math.round(ms / 86400000);
+};
+
+/* ============================================================
+   BATCH STATUS LOGIC
+   ============================================================ */
+
+function batchStatus(batch) {
+  const now = new Date();
+  const expiry = new Date(batch.expiryDate);
+  const renewal = new Date(batch.renewalAlertDate);
+  const fert = new Date(batch.fertilityResultDate);
+  const ster = new Date(batch.sterilityResultDate);
+
+  if (now > expiry) return { code: 'expired', label: 'Expiré', cls: 's-grey' };
+  if (now >= renewal) return { code: 'urgent', label: 'Renouvellement requis', cls: 's-red' };
+  if (daysBetween(now, expiry) <= 7) return { code: 'soon', label: 'Expiration proche', cls: 's-orange' };
+  if (isSameDay(now, fert)) return { code: 'fert-today', label: 'Résultat fertilité aujourd\'hui', cls: 's-orange' };
+  if (isSameDay(now, ster)) return { code: 'ster-today', label: 'Résultat stérilité aujourd\'hui', cls: 's-orange' };
+  return { code: 'ok', label: 'En cours', cls: 's-green' };
+}
+
+function getBatchMedium(batch) {
+  return state.media.find(m => m.id === batch.mediumId);
+}
+
+function batchProgress(batch) {
+  const prep = startOfDay(new Date(batch.prepDateTime)).getTime();
+  const exp  = startOfDay(new Date(batch.expiryDate)).getTime();
+  const now  = Date.now();
+  if (exp <= prep) return 0;
+  const pct = ((now - prep) / (exp - prep)) * 100;
+  return Math.max(0, Math.min(100, pct));
+}
+
+/* ============================================================
+   RENDERING — DASHBOARD
+   ============================================================ */
+
+function renderDashboard() {
+  const now = new Date();
+  const visible = state.batches.filter(b => state.settings.showExpired || batchStatus(b).code !== 'expired');
+
+  // Stats
+  const active  = state.batches.filter(b => batchStatus(b).code === 'ok' || batchStatus(b).code === 'fert-today' || batchStatus(b).code === 'ster-today').length;
+  const watch   = state.batches.filter(b => batchStatus(b).code === 'soon').length;
+  const urgent  = state.batches.filter(b => batchStatus(b).code === 'urgent').length;
+  const expired = state.batches.filter(b => batchStatus(b).code === 'expired').length;
+  document.getElementById('stat-active').textContent  = active;
+  document.getElementById('stat-watch').textContent   = watch;
+  document.getElementById('stat-urgent').textContent  = urgent;
+  document.getElementById('stat-expired').textContent = expired;
+  document.getElementById('header-count').textContent = state.batches.length;
+
+  document.getElementById('today-label').textContent = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  document.getElementById('batches-count').textContent = state.batches.length + ' au total';
+
+  // Alerts
+  const alerts = [];
+  state.batches.forEach(b => {
+    const s = batchStatus(b);
+    const medium = getBatchMedium(b);
+    if (!medium) return;
+    if (s.code === 'expired')  alerts.push({ cls: 'd-red',    msg: 'EXPIRE AUJOURD\'HUI', medium: medium.name, batch: b });
+    else if (s.code === 'urgent')  alerts.push({ cls: 'd-red',    msg: 'Renouvellement requis', medium: medium.name, batch: b });
+    else if (s.code === 'soon')    alerts.push({ cls: 'd-orange', msg: `Expire ${fmtRelativeDays(daysBetween(now, b.expiryDate))}`, medium: medium.name, batch: b });
+    else if (s.code === 'fert-today') alerts.push({ cls: 'd-yellow', msg: 'Résultat fertilité attendu', medium: medium.name, batch: b });
+    else if (s.code === 'ster-today') alerts.push({ cls: 'd-yellow', msg: 'Résultat stérilité attendu', medium: medium.name, batch: b });
+  });
+
+  const banner = document.getElementById('alerts-banner');
+  if (alerts.length === 0) {
+    banner.innerHTML = '';
+    banner.className = '';
+  } else {
+    banner.className = 'alerts-banner';
+    banner.innerHTML = `
+      <div class="alerts-banner-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        Alertes du jour (${alerts.length})
+      </div>
+      ${alerts.map(a => `
+        <div class="alert-item ${a.cls}">
+          <span class="alert-dot"></span>
+          <span class="alert-medium"><b>${escapeHtml(a.medium)}</b>${a.batch.lotNumber ? ' · ' + escapeHtml(a.batch.lotNumber) : ''}</span>
+          <span class="alert-msg">${a.msg}</span>
+        </div>
+      `).join('')}
+    `;
+  }
+
+  // Batches list
+  const list = document.getElementById('batches-list');
+  const empty = document.getElementById('empty-state');
+  if (visible.length === 0) {
+    list.innerHTML = '';
+    empty.classList.remove('hidden');
+  } else {
+    empty.classList.add('hidden');
+    // Sort: urgent first, then soon, then by expiry
+    const order = { urgent: 0, soon: 1, 'fert-today': 2, 'ster-today': 3, ok: 4, expired: 5 };
+    const sorted = [...visible].sort((a, b) => {
+      const sa = order[batchStatus(a).code], sb = order[batchStatus(b).code];
+      if (sa !== sb) return sa - sb;
+      return new Date(a.expiryDate) - new Date(b.expiryDate);
+    });
+    list.innerHTML = sorted.map(renderBatchCard).join('');
+  }
+
+  // Header dot state
+  const dot = document.getElementById('header-dot');
+  dot.className = 'dot ' + (urgent > 0 ? 'dot-urgent' : expired > 0 ? 'dot-amber' : 'dot-ok');
+  dot.style.background = urgent > 0 ? 'var(--red)' : expired > 0 ? 'var(--amber)' : 'var(--green)';
+  dot.style.boxShadow = urgent > 0 ? '0 0 10px var(--red)' : expired > 0 ? '0 0 10px var(--amber)' : '0 0 10px var(--green)';
+}
+
+function renderBatchCard(batch) {
+  const medium = getBatchMedium(batch);
+  if (!medium) return '';
+  const s = batchStatus(batch);
+  const pct = batchProgress(batch);
+  const now = new Date();
+  const daysLeft = daysBetween(now, batch.expiryDate);
+  const progressCls = s.code === 'urgent' ? 'danger' : (s.code === 'soon' || daysLeft <= 7) ? 'warn' : '';
+  const expiryCls = s.code === 'urgent' ? 'alert-red' : daysLeft <= 7 ? 'alert' : '';
+  const remaining = s.code === 'expired' ? 'Expiré' : `${daysLeft} jour${Math.abs(daysLeft) > 1 ? 's' : ''} restant${Math.abs(daysLeft) > 1 ? 's' : ''}`;
+  const dotCls = s.code === 'urgent' ? 'danger' : s.code === 'soon' ? 'warn' : s.code === 'expired' ? 'grey' : '';
+  const isBroth = medium.type === 'broth';
+  const tag = `<span class="tag ${isBroth ? 'broth' : ''}">${isBroth ? 'BOUILLON' : 'SOLIDE'}</span>`;
+
+  return `
+    <div class="batch-card ${s.cls}">
+      <div class="batch-head">
+        <div>
+          <div class="batch-name">${escapeHtml(medium.name)}</div>
+          <div class="batch-meta">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+            <span>${escapeHtml(medium.strain)}</span>${batch.lotNumber ? '<span style="opacity:0.5">·</span><span>' + escapeHtml(batch.lotNumber) + '</span>' : ''}
+          </div>
+        </div>
+        ${tag}
+      </div>
+
+      <div class="batch-dates">
+        <div>
+          <span class="lbl">Préparation</span>
+          <span class="val">${fmtDateTime(batch.prepDateTime)}</span>
+        </div>
+        <div>
+          <span class="lbl">Expiration</span>
+          <span class="val ${expiryCls}">${fmtDate(batch.expiryDate)}</span>
+        </div>
+        <div>
+          <span class="lbl">Fertilité</span>
+          <span class="val">${fmtDate(batch.fertilityResultDate)}</span>
+        </div>
+        <div>
+          <span class="lbl">Stérilité</span>
+          <span class="val">${fmtDateTime(batch.sterilityResultDate)}</span>
+        </div>
+      </div>
+
+      <div class="renewal-row">
+        <span class="lbl">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          Renouvellement
+        </span>
+        <span class="val">${fmtDate(batch.renewalAlertDate)}</span>
+      </div>
+
+      <div class="progress ${progressCls}"><span style="width:${pct.toFixed(1)}%"></span></div>
+
+      <div class="batch-foot">
+        <span><span class="status-dot ${dotCls}"></span>${s.label} — ${remaining}</span>
+        <div class="card-actions">
+          <button class="icon-btn" data-edit="${batch.id}">Modifier</button>
+          <button class="icon-btn danger" data-del="${batch.id}">Suppr.</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ============================================================
+   RENDERING — REGISTER
+   ============================================================ */
+
+function renderRegister() {
+  const sel = document.getElementById('f-medium');
+  sel.innerHTML = state.media.map(m =>
+    `<option value="${m.id}">${escapeHtml(m.name)} (${m.type === 'solid' ? 'Solide' : 'Bouillon'})</option>`
+  ).join('');
+
+  // Default to today
+  const date = document.getElementById('f-date');
+  const time = document.getElementById('f-time');
+  if (!date.value) date.value = new Date().toISOString().slice(0, 10);
+  if (!time.value) time.value = new Date().toTimeString().slice(0, 5);
+
+  updatePreview();
+}
+
+function updatePreview() {
+  const mId = document.getElementById('f-medium').value;
+  const date = document.getElementById('f-date').value;
+  const time = document.getElementById('f-time').value;
+  const medium = state.media.find(m => m.id === mId);
+  const preview = document.getElementById('preview');
+  const sub = document.getElementById('preview-medium');
+
+  if (!medium || !date || !time) {
+    document.getElementById('p-fert').textContent  = '—';
+    document.getElementById('p-ster').textContent  = '—';
+    document.getElementById('p-exp').textContent   = '—';
+    document.getElementById('p-renew').textContent = '—';
+    sub.textContent = '—';
+    return;
+  }
+  const prep = new Date(`${date}T${time}`);
+  const { fertilityResult, sterilityResult, expiry, renewalAlert } = computeBatchDates(medium, prep);
+  document.getElementById('p-fert').textContent  = fmtDate(fertilityResult);
+  document.getElementById('p-ster').textContent  = fmtDateTime(sterilityResult);
+  document.getElementById('p-exp').textContent   = fmtDate(expiry);
+  document.getElementById('p-renew').textContent = fmtDate(renewalAlert);
+  sub.textContent = `${escapeHtml(medium.name)} · ${medium.type === 'solid' ? '30 jours' : '15 jours'}`;
+  preview.dataset.ready = '1';
+}
+
+/* ============================================================
+   RENDERING — MEDIA
+   ============================================================ */
+
+function renderMedia() {
+  const list = document.getElementById('media-list');
+  document.getElementById('media-count').textContent = `${state.media.length} milieux`;
+  list.innerHTML = state.media.map(m => {
+    const isBroth = m.type === 'broth';
+    return `
+      <div class="media-card ${isBroth ? 'broth' : ''}">
+        <div class="media-head">
+          <div class="media-name">${escapeHtml(m.name)}</div>
+          <span class="tag ${isBroth ? 'broth' : ''}">${m.isDefault ? 'DÉFAUT' : 'PERSO'}</span>
+        </div>
+        <div class="media-grid">
+          <div>
+            <span class="lbl">Type</span>
+            <span class="val">${m.type === 'solid' ? 'Solide · 30 j' : 'Bouillon · 15 j'}</span>
+          </div>
+          <div>
+            <span class="lbl">Fertilité</span>
+            <span class="val">${m.fertilityDelayDays} jour${m.fertilityDelayDays > 1 ? 's' : ''}</span>
+          </div>
+          <div style="grid-column: 1/-1">
+            <span class="lbl">Souche</span>
+            <span class="val">${escapeHtml(m.strain)}</span>
+          </div>
+          <div style="grid-column: 1/-1">
+            <span class="lbl">Stérilité</span>
+            <span class="val blue">${getSterilityDisplay(m)}</span>
+          </div>
+        </div>
+        <div class="media-foot">
+          <button class="icon-btn" data-medit="${m.id}">Modifier</button>
+          ${m.isDefault ? '' : `<button class="icon-btn danger" data-mdel="${m.id}">Supprimer</button>`}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function showMediaForm(medium) {
+  const wrap = document.getElementById('media-form-wrap');
+  const form = document.getElementById('media-form');
+  const title = document.getElementById('media-form-title');
+  wrap.classList.remove('hidden');
+  if (medium) {
+    title.textContent = 'Modifier le milieu';
+    document.getElementById('m-id').value = medium.id;
+    document.getElementById('m-name').value = medium.name;
+    document.getElementById('m-type').value = medium.type;
+    document.getElementById('m-strain').value = medium.strain;
+    document.getElementById('m-fert').value = medium.fertilityDelayDays;
+    const fmt = medium.sterilityFormat;
+    document.querySelector(`input[name="m-fmt"][value="${fmt}"]`).checked = true;
+    if (fmt === 'range') {
+      document.getElementById('m-min').value = medium.sterilityMinHours || '';
+      document.getElementById('m-max').value = medium.sterilityMaxHours || '';
+    } else {
+      document.getElementById('m-single').value = medium.sterilityValue || '';
+    }
+    updateMediaFormFields();
+  } else {
+    title.textContent = 'Nouveau milieu';
+    form.reset();
+    document.getElementById('m-id').value = '';
+    document.querySelector('input[name="m-fmt"][value="days"]').checked = true;
+    updateMediaFormFields();
+  }
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function updateMediaFormFields() {
+  const fmt = document.querySelector('input[name="m-fmt"]:checked').value;
+  const singleWrap = document.getElementById('m-single-wrap');
+  const rangeWrap  = document.getElementById('m-range-wrap');
+  const singleLbl  = document.getElementById('m-single-lbl');
+  if (fmt === 'range') {
+    singleWrap.classList.add('hidden');
+    rangeWrap.classList.remove('hidden');
+  } else {
+    rangeWrap.classList.add('hidden');
+    singleWrap.classList.remove('hidden');
+    singleLbl.textContent = fmt === 'days' ? 'Durée (jours)' : 'Durée (heures)';
+  }
+}
+
+/* ============================================================
+   RENDERING — SETTINGS
+   ============================================================ */
+
+function renderSettings() {
+  document.getElementById('s-notif').checked   = state.settings.browserNotifications;
+  document.getElementById('s-expired').checked = state.settings.showExpired;
+  const labInput = document.getElementById('s-labname');
+  if (labInput) labInput.value = state.settings.labName || '';
+}
+
+/* ============================================================
+   VIEW ROUTING
+   ============================================================ */
+
+function go(view) {
+  state.currentView = view;
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.dataset.view === view));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.go === view));
+  if (view === 'dashboard') renderDashboard();
+  if (view === 'register')  renderRegister();
+  if (view === 'media')     renderMedia();
+  if (view === 'settings')  renderSettings();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+
+function saveBatch(e) {
+  e.preventDefault();
+  const mId = document.getElementById('f-medium').value;
+  const lot = document.getElementById('f-lot').value.trim();
+  const date = document.getElementById('f-date').value;
+  const time = document.getElementById('f-time').value;
+  const medium = state.media.find(m => m.id === mId);
+  if (!medium) return toast('Veuillez sélectionner un milieu.', 'error');
+  if (!date || !time) return toast('Veuillez saisir date et heure.', 'error');
+
+  const prep = new Date(`${date}T${time}`);
+  const { fertilityResult, sterilityResult, expiry, renewalAlert } = computeBatchDates(medium, prep);
+  const batch = {
+    id: 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+    mediumId: medium.id,
+    lotNumber: lot || null,
+    prepDateTime: prep.toISOString(),
+    fertilityResultDate: fertilityResult.toISOString(),
+    sterilityResultDate: sterilityResult.toISOString(),
+    expiryDate: expiry.toISOString(),
+    renewalAlertDate: renewalAlert.toISOString(),
+    createdAt: new Date().toISOString(),
+  };
+  state.batches.push(batch);
+  persist();
+  toast('Lot enregistré avec succès.', 'success');
+  document.getElementById('batch-form').reset();
+  go('dashboard');
+}
+
+function editBatch(id) {
+  const b = state.batches.find(x => x.id === id);
+  if (!b) return;
+  go('register');
+  document.getElementById('f-medium').value = b.mediumId;
+  document.getElementById('f-lot').value = b.lotNumber || '';
+  const d = new Date(b.prepDateTime);
+  document.getElementById('f-date').value = d.toISOString().slice(0, 10);
+  document.getElementById('f-time').value = fmtTime(d);
+  updatePreview();
+}
+
+function deleteBatch(id) {
+  confirmAction('Supprimer ce lot ?', 'Cette action est irréversible.', () => {
+    state.batches = state.batches.filter(b => b.id !== id);
+    persist();
+    renderDashboard();
+    toast('Lot supprimé.', 'success');
+  });
+}
+
+function saveMedia(e) {
+  e.preventDefault();
+  const id = document.getElementById('m-id').value;
+  const name = document.getElementById('m-name').value.trim();
+  const type = document.getElementById('m-type').value;
+  const strain = document.getElementById('m-strain').value.trim();
+  const fert = parseInt(document.getElementById('m-fert').value, 10);
+  const fmt = document.querySelector('input[name="m-fmt"]:checked').value;
+  if (!name || !strain || isNaN(fert) || fert < 0) return toast('Veuillez remplir tous les champs.', 'error');
+
+  const data = { name, type, strain, fertilityDelayDays: fert, sterilityFormat: fmt, isDefault: false };
+  if (fmt === 'range') {
+    const min = parseInt(document.getElementById('m-min').value, 10);
+    const max = parseInt(document.getElementById('m-max').value, 10);
+    if (isNaN(min) || isNaN(max) || min <= 0 || max <= 0 || min > max) return toast('Plage heures invalide.', 'error');
+    data.sterilityMinHours = min;
+    data.sterilityMaxHours = max;
+  } else {
+    const v = parseInt(document.getElementById('m-single').value, 10);
+    if (isNaN(v) || v <= 0) return toast('Durée invalide.', 'error');
+    data.sterilityValue = v;
+  }
+
+  if (id) {
+    const existing = state.media.find(m => m.id === id);
+    if (existing) Object.assign(existing, data);
+  } else {
+    data.id = 'm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    state.media.push(data);
+  }
+  persist();
+  document.getElementById('media-form-wrap').classList.add('hidden');
+  renderMedia();
+  toast('Milieu enregistré.', 'success');
+}
+
+function editMedia(id) {
+  const m = state.media.find(x => x.id === id);
+  if (m) showMediaForm(m);
+}
+
+function deleteMedia(id) {
+  const m = state.media.find(x => x.id === id);
+  if (!m || m.isDefault) return;
+  confirmAction(`Supprimer "${m.name}" ?`, 'Ce milieu personnalisé sera supprimé définitivement.', () => {
+    state.media = state.media.filter(x => x.id !== id);
+    persist();
+    renderMedia();
+    toast('Milieu supprimé.', 'success');
+  });
+}
+
+/* ============================================================
+   NOTIFICATIONS
+   ============================================================ */
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+  state.settings.browserNotifications = Notification.permission === 'granted';
+  persist();
+  renderSettings();
+}
+
+function fireBrowserNotification(alerts) {
+  if (!state.settings.browserNotifications) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (alerts.length === 0) return;
+  const text = alerts.slice(0, 3).map(a => `• ${a.medium}: ${a.msg}`).join('\n');
+  try {
+    new Notification(`MilieuXlab — ${alerts.length} alerte${alerts.length > 1 ? 's' : ''}`, {
+      body: text,
+      icon: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0A0E14"/><text x="50%" y="58%" text-anchor="middle" font-family="Arial" font-size="24" font-weight="bold" fill="#00C896">MX</text></svg>'),
+    });
+  } catch (e) { /* silent */ }
+}
+
+/* ============================================================
+   TOAST + CONFIRM
+   ============================================================ */
+
+let toastTimer;
+function toast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast ' + type; }, 2400);
+}
+
+function confirmAction(title, text, onOk) {
+  const modal = document.getElementById('confirm');
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-text').textContent = text;
+  modal.classList.remove('hidden');
+  const ok = document.getElementById('confirm-ok');
+  const cancel = document.getElementById('confirm-cancel');
+  const close = () => modal.classList.add('hidden');
+  const okHandler = () => { close(); ok.removeEventListener('click', okHandler); cancel.removeEventListener('click', cancelHandler); onOk(); };
+  const cancelHandler = () => { close(); ok.removeEventListener('click', okHandler); cancel.removeEventListener('click', cancelHandler); };
+  ok.addEventListener('click', okHandler);
+  cancel.addEventListener('click', cancelHandler);
+}
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
+/* ============================================================
+   THEME — dark / light toggle (persisted in localStorage)
+   ============================================================ */
+
+function getSavedTheme() {
+  try {
+    const t = localStorage.getItem(THEME_KEY);
+    if (t === 'light' || t === 'dark') return t;
+  } catch (e) {}
+  return null;
+}
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+  if (theme === 'light') root.setAttribute('data-theme', 'light');
+  else root.setAttribute('data-theme', 'dark');
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+}
+
+/* ============================================================
+   PDF EXPORT — Planning de renouvellement
+   ============================================================ */
+
+let _pdfFilters = { period: 'all', onlyUrgent: false };
+
+function openPdfFilters() {
+  document.getElementById('pdf-period').value       = _pdfFilters.period;
+  document.getElementById('pdf-only-urgent').checked = _pdfFilters.onlyUrgent;
+  document.getElementById('pdf-filters').classList.remove('hidden');
+}
+
+function closePdfFilters() {
+  document.getElementById('pdf-filters').classList.add('hidden');
+}
+
+function startPdfExport() {
+  _pdfFilters = {
+    period:     document.getElementById('pdf-period').value,
+    onlyUrgent: document.getElementById('pdf-only-urgent').checked,
+  };
+  closePdfFilters();
+  try {
+    const doc = buildPdfDoc();
+    const today = new Date();
+    const fname = `planning-renouvellement-${today.getFullYear()}-${pad2(today.getMonth()+1)}-${pad2(today.getDate())}.pdf`;
+    doc.download(fname);
+  } catch (e) {
+    console.error('PDF generation failed:', e);
+    toast('Erreur lors de la génération du PDF : ' + (e.message || e), 'error');
+  }
+}
+
+const pad2 = n => String(n).padStart(2, '0');
+const getRenewalDate = b => new Date(b.renewalAlertDate);
+const daysUntil      = d => daysBetween(new Date(), d);
+
+function formatDays(days) {
+  if (days === 0) return "aujourd'hui";
+  return days > 0 ? `+${days} j` : `${days} j`;
+}
+
+function getPeriodRange(period) {
+  const now = startOfDay(new Date());
+  if (period === 'all') return null;
+  if (period === 'week') {
+    const day = now.getDay() || 7;                  // Sun(0) → 7
+    const start = addDays(now, -(day - 1));          // lundi
+    return { start, end: addDays(start, 6), label: 'Cette semaine' };
+  }
+  if (period === 'month') {
+    return {
+      start: new Date(now.getFullYear(), now.getMonth(), 1),
+      end:   new Date(now.getFullYear(), now.getMonth() + 1, 0),
+      label: 'Ce mois',
+    };
+  }
+  if (period === 'quarter') {
+    const qStartMonth = Math.floor(now.getMonth() / 3) * 3;
+    return {
+      start: new Date(now.getFullYear(), qStartMonth, 1),
+      end:   new Date(now.getFullYear(), qStartMonth + 3, 0),
+      label: 'Ce trimestre',
+    };
+  }
+  return null;
+}
+
+function pdfStatusOf(batch) {
+  const code = batchStatus(batch).code;
+  if (code === 'expired') return { bucket: 'expired', label: 'Expiré' };
+  if (code === 'urgent' || code === 'soon') return { bucket: 'urgent', label: 'À renouveler' };
+  return { bucket: 'ok', label: 'Conforme' };
+}
+
+function preparePdfRows() {
+  const range    = getPeriodRange(_pdfFilters.period);
+  const labName  = (state.settings.labName || '').trim() || 'MilieuXlab';
+  const now      = new Date();
+  const genDate  = fmtDateTime(now);
+  const periodText = range
+    ? `${range.label} (${fmtDate(range.start)} – ${fmtDate(range.end)})`
+    : 'Toutes les dates';
+
+  let rows = state.batches
+    .map(b => ({ batch: b, medium: getBatchMedium(b) }))
+    .filter(({ medium }) => !!medium);
+
+  if (range) {
+    const lo = startOfDay(range.start);
+    const hi = startOfDay(addDays(range.end, 1));
+    rows = rows.filter(({ batch }) => {
+      const r = getRenewalDate(batch);
+      return r >= lo && r <= hi;
+    });
+  }
+
+  if (_pdfFilters.onlyUrgent) {
+    rows = rows.filter(({ batch }) => {
+      const c = batchStatus(batch).code;
+      return c === 'expired' || c === 'urgent' || c === 'soon';
+    });
+  }
+
+  rows.sort((a, b) => getRenewalDate(a.batch) - getRenewalDate(b.batch));
+
+  const summary = { total: rows.length, expired: 0, urgent: 0, ok: 0 };
+  rows.forEach(r => {
+    const b = pdfStatusOf(r.batch).bucket;
+    if (b === 'expired') summary.expired++;
+    else if (b === 'urgent') summary.urgent++;
+    else summary.ok++;
+  });
+
+  return { rows, summary, labName, genDate, periodText };
+}
+
+function drawStatTile(pdf, x, y, w, h, n, label, numColor, bg) {
+  if (bg) pdf.rect(x, y, w, h, { fill: bg });
+  pdf.rect(x, y, w, h, { stroke: '#C7D2DD', strokeWidth: 0.5 });
+  // Number: large, near the top-left with padding (size 20, baseline at y+25)
+  pdf.text(String(n), x + 10, y + 25, { size: 20, bold: true, color: numColor });
+  // Label: small uppercase, below the number
+  pdf.text(label.toUpperCase(), x + 10, y + 48, { size: 7.5, color: '#5A7A99' });
+}
+
+function buildPdfDoc() {
+  const { rows, summary, labName, genDate, periodText } = preparePdfRows();
+  const pdf = new PDF({
+    size: 'A4', orientation: 'portrait',
+    margin: { top: 42, right: 42, bottom: 51, left: 42 },
+  });
+  const PW = pdf.w;
+  const M = pdf.margin.left;
+  const contentW = PW - 2 * M;
+
+  // ----- HEADER -----
+  pdf.text(labName, M, 60, { size: 14, bold: true });
+  pdf.text('Planning de renouvellement', PW - M, 60, { size: 9, color: '#5A7A99', align: 'right' });
+  pdf.text('Généré le ' + genDate, PW - M, 75, { size: 9, color: '#0A0E14', align: 'right' });
+  pdf.line(M, 90, PW - M, 90, { color: '#0A0E14', width: 1.5 });
+
+  // ----- TITLE + SUBTITLE -----
+  pdf.text('Planning de renouvellement des milieux de culture', M, 120, { size: 16, bold: true });
+  const sub = `${periodText} · ${summary.total} lot${summary.total > 1 ? 's' : ''}`;
+  pdf.text(sub.toUpperCase(), M, 138, { size: 8.5, color: '#5A7A99' });
+
+  // ----- SUMMARY TILES (4) -----
+  const tileY = 150, tileH = 60;
+  const tileGap = 8;
+  const tileW = (contentW - 3 * tileGap) / 4;
+  drawStatTile(pdf, M + 0 * (tileW + tileGap), tileY, tileW, tileH, summary.total,   'Total',                    '#0A0E14', '#F8FAFC');
+  drawStatTile(pdf, M + 1 * (tileW + tileGap), tileY, tileW, tileH, summary.expired, 'Expirés',                  '#D6334B', '#FEE2E2');
+  drawStatTile(pdf, M + 2 * (tileW + tileGap), tileY, tileW, tileH, summary.urgent,  'À renouveler (<= 7 j)',   '#B45309', '#FEF3C7');
+  drawStatTile(pdf, M + 3 * (tileW + tileGap), tileY, tileW, tileH, summary.ok,      'Conformes',                '#007A5E', '#F8FAFC');
+
+  // ----- TABLE -----
+  // Column widths sized to fit BOTH headers (7pt bold) AND data (9pt regular).
+  // No safety margin — the columns are wide enough that real Helvetica glyphs
+  // fit comfortably with room to spare. (Real Helvetica may be ~10% wider than
+  // AFM nominal, so we aim for text being ~70-80% of available width.)
+  // Total content area is 510pt (page width 595 - margins 42*2).
+  // Distribution: wider Milieu (for BHI Chocolat etc.) and wider Jours (for aujourd'hui)
+  // (75, 75, 65, 65, 80, 65, 85) = 510
+  const tableY = 230;
+  const widths = [75, 75, 65, 65, 80, 65, 85];  // sums to 510
+  const t = pdf.table({ x: M, y: tableY, widths, rowHeight: 18, headerHeight: 24, headerRepeat: true });
+  t.header(
+    ['Milieu', 'N° de lot', 'Préparation', 'Péremption', 'Renouvellement', 'Jours', 'Statut'],
+    { bg: '#E2E8F0', textColor: '#0A0E14', bold: true, size: 7 }
+  );
+
+  if (rows.length === 0) {
+    // Empty state: positioned BELOW the table header (tableY + 18), with a white
+    // fill so the table header doesn't bleed through. Stroke only (no dashed effect).
+    const emptyY = tableY + 18;
+    pdf.rect(M, emptyY, contentW, 60, { fill: '#FFFFFF', stroke: '#C7D2DD', strokeWidth: 0.5 });
+    pdf.text('Aucun lot ne correspond aux critères sélectionnés.',
+             M, emptyY + 35, { size: 10, color: '#5A7A99', align: 'center', width: contentW });
+  } else {
+    rows.forEach((r, i) => {
+      const ps = pdfStatusOf(r.batch);
+      const days = daysUntil(new Date(r.batch.expiryDate));
+      const bg = ps.bucket === 'expired' ? '#FEE2E2'
+              : ps.bucket === 'urgent'  ? '#FEF3C7'
+              : (i % 2 === 0 ? '#FFFFFF' : '#F8FAFC');
+      const fg = ps.bucket === 'expired' ? '#7F1D1D'
+              : ps.bucket === 'urgent'  ? '#78350F'
+              : '#0A0E14';
+      t.row([
+        r.medium.name,
+        r.batch.lotNumber || '—',
+        fmtDate(r.batch.prepDateTime),
+        fmtDate(r.batch.expiryDate),
+        fmtDate(r.batch.renewalAlertDate),
+        formatDays(days),
+        ps.label,
+      ], { bg, textColor: fg });
+    });
+  }
+  t.end();
+
+  // ----- FOOTER (post-stamped on every page in pdf.download) -----
+  pdf.footer((pageIdx, total) =>
+    `Page ${pageIdx + 1} / ${total} · ${labName} · Généré le ${genDate}`);
+
+  return pdf;
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+
+function init() {
+  // Apply theme as early as possible (before first paint) to avoid flash
+  applyTheme(getSavedTheme() || 'dark');
+
+  loadState();
+
+  // Navigation
+  document.querySelectorAll('[data-go]').forEach(btn => {
+    btn.addEventListener('click', () => go(btn.dataset.go));
+  });
+
+  // Theme toggle
+  const themeBtn = document.getElementById('btn-theme');
+  if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
+
+  // Register form
+  document.getElementById('batch-form').addEventListener('submit', saveBatch);
+  ['f-medium','f-date','f-time'].forEach(id => {
+    document.getElementById(id).addEventListener('change', updatePreview);
+    document.getElementById(id).addEventListener('input', updatePreview);
+  });
+
+  // Media form
+  document.getElementById('btn-add-media').addEventListener('click', () => showMediaForm(null));
+  document.getElementById('media-form-close').addEventListener('click', () => document.getElementById('media-form-wrap').classList.add('hidden'));
+  document.querySelectorAll('input[name="m-fmt"]').forEach(r => r.addEventListener('change', updateMediaFormFields));
+  document.getElementById('media-form').addEventListener('submit', saveMedia);
+
+  // List event delegation
+  document.getElementById('batches-list').addEventListener('click', e => {
+    const editId = e.target.dataset.edit;
+    const delId  = e.target.dataset.del;
+    if (editId) editBatch(editId);
+    if (delId)  deleteBatch(delId);
+  });
+  document.getElementById('media-list').addEventListener('click', e => {
+    const editId = e.target.dataset.medit;
+    const delId  = e.target.dataset.mdel;
+    if (editId) editMedia(editId);
+    if (delId)  deleteMedia(delId);
+  });
+
+  // Settings
+  document.getElementById('s-notif').addEventListener('change', async (e) => {
+    if (e.target.checked) {
+      await requestNotificationPermission();
+    } else {
+      state.settings.browserNotifications = false;
+      persist();
+    }
+  });
+  document.getElementById('s-expired').addEventListener('change', e => {
+    state.settings.showExpired = e.target.checked;
+    persist();
+    if (state.currentView === 'dashboard') renderDashboard();
+  });
+  const labInput = document.getElementById('s-labname');
+  if (labInput) {
+    labInput.addEventListener('change', e => {
+      state.settings.labName = e.target.value.trim();
+      persist();
+    });
+  }
+  document.getElementById('btn-reset-batches').addEventListener('click', () => {
+    confirmAction('Supprimer tous les lots ?', 'Tous les lots enregistrés seront effacés.', () => {
+      state.batches = [];
+      persist();
+      renderDashboard();
+      toast('Tous les lots ont été supprimés.', 'success');
+    });
+  });
+  document.getElementById('btn-reset-all').addEventListener('click', () => {
+    confirmAction('Réinitialiser l\'application ?', 'Lots, milieux personnalisés et préférences seront effacés. Les milieux par défaut seront restaurés.', () => {
+      localStorage.removeItem(STORAGE.BATCHES);
+      localStorage.removeItem(STORAGE.MEDIA);
+      localStorage.removeItem(STORAGE.SETTINGS);
+      loadState();
+      renderDashboard();
+      renderMedia();
+      renderSettings();
+      toast('Application réinitialisée.', 'success');
+    });
+  });
+
+  // PDF export
+  document.getElementById('btn-pdf').addEventListener('click', openPdfFilters);
+  document.getElementById('pdf-cancel').addEventListener('click', closePdfFilters);
+  document.getElementById('pdf-generate').addEventListener('click', startPdfExport);
+
+  // Initial render
+  renderDashboard();
+
+  // Browser notifications on load
+  const alerts = computeTodaysAlerts();
+  // Only fire an OS notification on load if the user is NOT looking at the tab
+  // (otherwise the in-app banner handles it; firing both would be redundant).
+  if (alerts.length > 0 && document.hidden) fireBrowserNotification(alerts);
+  startNotificationPoller();
+
+  // PWA install gate (blocks the app in regular browser tabs)
+  setupInstallGate();
+  if (isInstalledPWA()) {
+    // App is installed — register the SW and try to subscribe for push
+    registerServiceWorker();
+  }
+}
+
+function computeTodaysAlerts() {
+  const out = [];
+  const now = new Date();
+  state.batches.forEach(b => {
+    const s = batchStatus(b);
+    const medium = getBatchMedium(b);
+    if (!medium) return;
+    if (s.code === 'urgent')  out.push({ medium: medium.name, msg: 'Renouvellement requis', batchId: b.id });
+    else if (s.code === 'expired') out.push({ medium: medium.name, msg: 'EXPIRÉ', batchId: b.id });
+    else if (s.code === 'fert-today') out.push({ medium: medium.name, msg: 'Résultat fertilité', batchId: b.id });
+    else if (s.code === 'ster-today') out.push({ medium: medium.name, msg: 'Résultat stérilité', batchId: b.id });
+  });
+  return out;
+}
+
+/* ============================================================
+   NOTIFICATION POLLER
+   Re-checks alerts every 5 min and fires a Notification only when:
+     • the alert set has actually changed since the last check, AND
+     • the tab is hidden (so we don't spam while user is looking at it),
+     • and OS/browser permission is still 'granted'.
+   ============================================================ */
+
+let _lastAlertSig = '';
+let _pollTimer = null;
+
+function alertSignature(alerts) {
+  return alerts
+    .slice()
+    .sort((a, b) => (a.batchId || '').localeCompare(b.batchId || ''))
+    .map(a => `${a.batchId}:${a.msg}`)
+    .join('|');
+}
+
+function startNotificationPoller() {
+  if (_pollTimer) clearInterval(_pollTimer);
+  const alerts = computeTodaysAlerts();
+  _lastAlertSig = alertSignature(alerts);
+  _pollTimer = setInterval(checkAlertsForNotification, NOTIF_POLL_MS);
+  // Also re-check when the tab regains focus, so that the next time the user
+  // switches away, we have a fresh baseline (no surprise notification on first blur).
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      const fresh = computeTodaysAlerts();
+      _lastAlertSig = alertSignature(fresh);
+    }
+  });
+}
+
+function checkAlertsForNotification() {
+  if (!state.settings.browserNotifications) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  // Don't fire while the user is actively looking at the tab — the in-app
+  // banner already shows the alert there.
+  if (!document.hidden) return;
+  const fresh = computeTodaysAlerts();
+  const sig = alertSignature(fresh);
+  if (sig === _lastAlertSig) return;
+  _lastAlertSig = sig;
+  if (fresh.length === 0) return;
+  fireBrowserNotification(fresh);
+}
+
+/* ============================================================
+   PWA — install gate, service worker, Web Push subscription
+   ============================================================ */
+
+const PWA_KEY = 'milieuxlab.pwa.v1';
+let _deferredInstallPrompt = null;
+
+function isInstalledPWA() {
+  // 1. Android/Chrome: matchMedia('(display-mode: standalone)') === true
+  if (window.matchMedia('(display-mode: standalone)').matches) return true;
+  // 2. iOS Safari: window.navigator.standalone === true
+  if (window.navigator.standalone === true) return true;
+  // 3. Some Android launchers
+  if (document.referrer.includes('android-app://')) return true;
+  return false;
+}
+
+function isIos() {
+  return /iphone|ipad|ipod/i.test(window.navigator.userAgent) && !window.MSStream;
+}
+function isAndroid() { return /android/i.test(window.navigator.userAgent); }
+
+function setupInstallGate() {
+  if (isInstalledPWA()) return; // already installed — let the app run
+
+  const gate = document.getElementById('install-gate');
+  if (!gate) return;
+  gate.hidden = false;
+  document.body.classList.add('has-install-gate');
+
+  // Two buttons in the gate. We show only the one that matches the device:
+  //   - Android user  → see only "Installer maintenant" (native prompt)
+  //   - iOS user      → see only "Installer sur iPhone" (opens the modal)
+  //   - other/desktop → both, so they can pick
+  const androidBtn = document.getElementById('install-trigger');
+  const iosBtn     = document.getElementById('install-ios-open');
+
+  if (isAndroid()) {
+    if (iosBtn) iosBtn.hidden = true;
+  } else if (isIos()) {
+    if (androidBtn) androidBtn.hidden = true;
+  }
+
+  // iOS modal handlers
+  const iosModal   = document.getElementById('ios-modal');
+  const iosClose   = document.getElementById('ios-modal-close');
+  const iosDismiss = document.getElementById('ios-modal-dismiss');
+  const openIosModal  = () => iosModal && iosModal.classList.remove('hidden');
+  const closeIosModal = () => iosModal && iosModal.classList.add('hidden');
+  if (iosBtn)     iosBtn.addEventListener('click', openIosModal);
+  if (iosClose)   iosClose.addEventListener('click', closeIosModal);
+  if (iosDismiss) iosDismiss.addEventListener('click', closeIosModal);
+  if (iosModal) {
+    iosModal.addEventListener('click', (e) => {
+      if (e.target === iosModal) closeIosModal();
+    });
+  }
+
+  // Android: bind the real install button to the deferred native prompt.
+  // The button is always visible to Android users; if the prompt isn't
+  // available yet (manifest not yet satisfied, etc.) it does nothing.
+  if (androidBtn) {
+    androidBtn.addEventListener('click', async () => {
+      if (_deferredInstallPrompt) {
+        _deferredInstallPrompt.prompt();
+        try {
+          const choice = await _deferredInstallPrompt.userChoice;
+          if (choice && choice.outcome === 'accepted') {
+            gate.hidden = true;
+            document.body.classList.remove('has-install-gate');
+          }
+        } catch (e) { /* user dismissed */ }
+        _deferredInstallPrompt = null;
+      } else {
+        // Prompt not yet available (e.g. manifest not yet valid, or
+        // browser already dismissed). Show a transient toast.
+        if (typeof toast === 'function') {
+          toast('Ouvrez le menu ⋮ de Chrome puis « Installer l\'application ».', '');
+        }
+      }
+    });
+  }
+
+  // Capture the native install prompt as soon as the browser fires it.
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _deferredInstallPrompt = e;
+  });
+
+  // After install, hide the gate and let the app run
+  window.addEventListener('appinstalled', () => {
+    gate.hidden = true;
+    document.body.classList.remove('has-install-gate');
+    registerServiceWorker();
+  });
+}
+
+async function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.register('./sw.js');
+    // Fetch the VAPID public key from the server (avoids bundling a key in the client)
+    let vapidKey = '';
+    try {
+      const r = await fetch('/api/vapid-public');
+      if (r.ok) {
+        const j = await r.json();
+        vapidKey = j.vapidPublicKey;
+      }
+    } catch (e) { /* offline, ignore */ }
+    // Try to subscribe for Web Push (only works in installed PWA context)
+    await maybeSubscribePush(reg, vapidKey);
+  } catch (e) {
+    console.warn('Service worker registration failed:', e);
+  }
+}
+
+async function maybeSubscribePush(reg, vapidPublicKey) {
+  if (!('PushManager' in window)) return;
+  if (!vapidPublicKey) { console.warn('No VAPID public key from server'); return; }
+  if (!('showNotification' in reg)) return;
+  if (Notification.permission === 'denied') return;
+  try {
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      });
+    }
+    // Send the subscription to our backend
+    await fetch('/api/save-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription: sub.toJSON(),
+        batches: state.batches,
+        media: state.media,
+      }),
+    });
+  } catch (e) {
+    console.warn('Push subscription failed:', e);
+  }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+document.addEventListener('DOMContentLoaded', init);
+

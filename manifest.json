@@ -1,0 +1,50 @@
+{
+  "name": "MilieuXlab — Culture Media Manager",
+  "short_name": "MilieuXlab",
+  "description": "Suivi des milieux de culture, dates d'expiration et alertes de renouvellement.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#060810",
+  "theme_color": "#060810",
+  "lang": "fr",
+  "dir": "ltr",
+  "categories": ["productivity", "medical", "utilities"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nouveau lot",
+      "short_name": "Nouveau",
+      "description": "Enregistrer un nouveau lot de milieu",
+      "url": "./index.html#register",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Voir l'état des lots",
+      "url": "./index.html#dashboard",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

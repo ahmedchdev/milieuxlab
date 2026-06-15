@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m http.server 8765)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8765/index.html)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8765/styles.css)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8765/app.js)",
+      "Bash(where python *)",
+      "Bash(where node *)",
+      "Bash(curl -sIL \"https://mirrors.ctan.org/install/fonts/tex-gyre.tds.zip\")",
+      "Bash(curl -sIL \"https://raw.githubusercontent.com/notofonts/notofonts.github.io/main/fonts/Arimo/hinted/ttf/Arimo/Arimo-Regular.ttf\")",
+      "Bash(curl -sIL \"https://github.com/googlefonts/Arimo/raw/main/fonts/ttf/Arimo-Regular.ttf\")",
+      "Bash(curl -sIL \"https://raw.githubusercontent.com/google/fonts/main/apache/roboto/static/Roboto%5Bwdth,wght%5D.ttf\")",
+      "Bash(curl -sIL \"https://raw.githubusercontent.com/google/fonts/main/apache/roboto/Roboto%5Bwdth,wght%5D.ttf\")",
+      "Bash(curl -sIL \"https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Regular.ttf\")",
+      "Bash(curl -sIL \"https://github.com/ArtifexSoftware/MuPDF/raw/master/resources/fonts/urw/Helvetica.ttf\" -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(curl -sIL \"https://raw.githubusercontent.com/ArtifexSoftware/MuPDF/master/resources/fonts/urw/Helvetica.ttf\" -o /dev/null -w \"%{http_code} %{size_download}\\\\n\")",
+      "Bash(curl -sIL \"https://raw.githubusercontent.com/ArtifexSoftware/Ghostscript/master/base/NimbusRoman.afm\" -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(curl *)",
+      "Read(//tmp/**)"
+    ]
+  }
+}

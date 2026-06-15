@@ -1,0 +1,14 @@
+{
+  "name": "milieuxlab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MilieuXlab — Culture Media Manager (PWA + Web Push on Vercel)",
+  "scripts": {
+    "build-icons": "node build-icons.js",
+    "dev": "node -e \"require('http').createServer((req,res)=>{const fs=require('fs'),path=require('path');let p=req.url.split('?')[0];if(p==='/')p='/index.html';const f=path.join(process.cwd(),p);if(fs.existsSync(f)&&fs.statSync(f).isFile()){const ext=path.extname(f).slice(1);const types={html:'text/html',css:'text/css',js:'application/javascript',json:'application/json',svg:'image/svg+xml',png:'image/png'};res.writeHead(200,{'Content-Type':types[ext]||'application/octet-stream'});fs.createReadStream(f).pipe(res)}else{res.writeHead(404);res.end('Not found')}}).listen(3000,()=>console.log('http://localhost:3000'))\""
+  },
+  "dependencies": {
+    "@vercel/kv": "^2.0.0",
+    "web-push": "^3.6.7"
+  }
+}
