@@ -13,7 +13,7 @@ on:
       url:
         description: "App URL to ping"
         required: false
-        default: "https://milieuxlab.vercel.app"
+        default: "https://milieuxlab-m4tiziddd-ahmedchdevs-projects.vercel.app"
 
 # Opt into Node 24 on the GitHub Actions runner (default becomes Node 24
 # on 2026-06-16; Node 20 is removed 2026-09-16).
@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: Ping the cron endpoint
         env:
-          APP_URL: ${{ github.event.inputs.url || 'https://milieuxlab.vercel.app' }}
+          APP_URL: ${{ github.event.inputs.url || 'https://milieuxlab-m4tiziddd-ahmedchdevs-projects.vercel.app' }}
         run: |
           echo "Pinging $APP_URL/api/cron-check-alerts"
           HTTP_CODE=$(curl -sS -o /tmp/resp.json -w "%{http_code}" \
