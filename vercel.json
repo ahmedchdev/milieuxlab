@@ -22,6 +22,5 @@
         { "key": "Content-Type", "value": "application/manifest+json" }
       ]
     }
-  ],
-  "_comment": "The 5-min schedule is handled by .github/workflows/alerts-cron.yml which calls /api/cron-check-alerts directly. Vercel Hobby cron is capped at 2/day, while GitHub Actions gives us free unlimited cron."
+  ]
 }
