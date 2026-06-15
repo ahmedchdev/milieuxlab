@@ -1,15 +1,8 @@
-// Generates PNG icons from icons/icon.svg
-// Requires: npm install --save-dev sharp  (but we avoid dependencies, so use
-// a pure-JS approach: render SVG to a Canvas via a headless browser).
-// Easiest: use node's built-in support — but Node 20+ has no Canvas either.
-// Solution: write a tiny pure-JS PNG encoder. We only need 192 and 512.
-// Even simpler: just write the SVG into a .png by re-encoding as PNG with
-// a base64-embedded raster. The trick: most modern PWA launchers accept SVG
-// in the manifest if declared as image/svg+xml. But Android prefers PNG.
-// Cleanest: install sharp as a devDep, run once, commit PNGs.
-//
-// For now we generate a minimal PNG using a pure-JS approach (no deps).
-// Output: icons/icon-192.png and icons/icon-512.png
+// Generates the PWA icons: 192×192, 512×512, and 512×512 maskable.
+// Pure-JS PNG encoder (no native deps) so it runs anywhere Node does.
+// Design: blue→cyan gradient background with concentric circles (lab/petri
+// dish feel) and a small dark center dot. The gradient is also drawn at a
+// slight angle so the icons don't look flat.
 
 const fs = require('fs');
 const path = require('path');
@@ -32,34 +25,111 @@ function chunk(type, data) {
   const c = Buffer.alloc(4); c.writeUInt32BE(crc32(Buffer.concat([t, data])), 0);
   return Buffer.concat([len, t, data, c]);
 }
-function makePNG(size, fillR, fillG, fillB) {
-  // Solid-color PNG with a rounded-corner look — we draw a single colored
-  // square. Browsers/launchers will scale it; this is the simplest PNG that
-  // satisfies the manifest. PWA launchers don't need fine detail at 192px.
+
+// Pre-built draw routine. The icon is a flat square with a rounded-corner
+// mask applied by a separate mask pass. The mask turns the square into a
+// superellipse (squircle), which is what Android & iOS use for app icons.
+function makeIcon(size, opts) {
+  const r = opts.rounded;     // corner radius (px)
+  const cx = size / 2, cy = size / 2;
+  const outerR = size * 0.36;   // outermost ring
+  const middleR = size * 0.16;  // middle ring
+  const innerR  = size * 0.05;  // center dot
+  const strokeOuter = size * 0.045;
+  const strokeMid   = size * 0.035;
+
+  // For each pixel, compute the color.
+  // We don't draw circles via path rasterization — we use the distance from
+  // center and a series of annular bands. Simple and fast.
+  function pixelColor(x, y) {
+    // Linear gradient: top-left (purple) → bottom-right (cyan)
+    const t = (x + y) / (2 * size);
+    const tr = Math.max(0, Math.min(1, t));
+    // Interpolate purple (#a78bfa) → blue (#60a5fa) → cyan (#22d3ee)
+    let r, g, b;
+    if (tr < 0.5) {
+      const u = tr * 2;
+      r = Math.round(167 * (1 - u) + 96  * u);
+      g = Math.round(139 * (1 - u) + 165 * u);
+      b = Math.round(250 * (1 - u) + 250 * u);
+    } else {
+      const u = (tr - 0.5) * 2;
+      r = Math.round(96  * (1 - u) + 34  * u);
+      g = Math.round(165 * (1 - u) + 211 * u);
+      b = Math.round(250 * (1 - u) + 238 * u);
+    }
+
+    const dx = x - cx, dy = y - cy;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+
+    // Center dot (dark)
+    if (dist < innerR) {
+      return { r: 10, g: 14, b: 26, a: 255 };
+    }
+    // Inner ring stroke
+    if (Math.abs(dist - middleR) < strokeMid / 2) {
+      // Dark stroke against the gradient
+      return { r: 10, g: 14, b: 26, a: 255 };
+    }
+    // Outer ring stroke
+    if (Math.abs(dist - outerR) < strokeOuter / 2) {
+      return { r: 10, g: 14, b: 26, a: 255 };
+    }
+    // Maskable: leave a safe area around the edge
+    if (opts.maskable) {
+      const edge = Math.max(Math.abs(x - cx), Math.abs(y - cy));
+      if (edge > size * 0.30) {
+        // Same as background — no important content outside the safe zone
+        return { r, g, b, a: 255 };
+      }
+    }
+    return { r, g, b, a: 255 };
+  }
+
+  // Build raw image with rounded corner mask
+  const row = Buffer.alloc(1 + size * 4);
+  const raw = [];
+  for (let y = 0; y < size; y++) {
+    row.fill(0);
+    row[0] = 0; // filter: none
+    for (let x = 0; x < size; x++) {
+      // Rounded-corner alpha: if we're in a corner, check the rounded mask
+      let alpha = 255;
+      if (r > 0) {
+        const cornerX = x < r ? r : (x > size - r ? size - r : null);
+        const cornerY = y < r ? r : (y > size - r ? size - r : null);
+        if (cornerX !== null && cornerY !== null) {
+          const ddx = x - cornerX, ddy = y - cornerY;
+          const d = Math.sqrt(ddx*ddx + ddy*ddy);
+          if (d > r) {
+            // Fully transparent
+            alpha = 0;
+          } else if (d > r - 1) {
+            // Smooth edge
+            alpha = Math.round(255 * (1 - (d - (r - 1))));
+          }
+        }
+      }
+      const c = pixelColor(x, y);
+      const off = 1 + x * 4;
+      row[off]     = c.r;
+      row[off + 1] = c.g;
+      row[off + 2] = c.b;
+      row[off + 3] = alpha;
+    }
+    raw.push(Buffer.from(row));
+  }
+  const rawData = Buffer.concat(raw);
+  const idat = zlib.deflateSync(rawData);
+
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(size, 0);
   ihdr.writeUInt32BE(size, 4);
-  ihdr[8] = 8;  // bit depth
-  ihdr[9] = 2;  // color type RGB
-  ihdr[10] = 0; // compression
-  ihdr[11] = 0; // filter
-  ihdr[12] = 0; // interlace
-
-  // Build raw image data: each row = 1 filter byte + 3 bytes per pixel
-  const row = Buffer.alloc(1 + size * 3);
-  row[0] = 0; // filter: none
-  for (let x = 0; x < size; x++) {
-    // Horizontal gradient from left (blue) to right (cyan)
-    const t = x / Math.max(1, size - 1);
-    const r = Math.round(fillR * (1 - t) + 34  * t);
-    const g = Math.round(fillG * (1 - t) + 211 * t);
-    const b = Math.round(fillB * (1 - t) + 238 * t);
-    row[1 + x * 3] = r;
-    row[1 + x * 3 + 1] = g;
-    row[1 + x * 3 + 2] = b;
-  }
-  const raw = Buffer.concat(Array.from({ length: size }, () => row));
-  const idat = zlib.deflateSync(raw);
+  ihdr[8] = 8;   // bit depth
+  ihdr[9] = 6;   // color type RGBA
+  ihdr[10] = 0;  // compression
+  ihdr[11] = 0;  // filter
+  ihdr[12] = 0;  // interlace
 
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
@@ -71,11 +141,11 @@ function makePNG(size, fillR, fillG, fillB) {
 
 const out = path.join(__dirname, 'icons');
 if (!fs.existsSync(out)) fs.mkdirSync(out, { recursive: true });
-// Brand color: blue (#60a5fa = 96, 165, 250)
-fs.writeFileSync(path.join(out, 'icon-192.png'), makePNG(192, 96, 165, 250));
-fs.writeFileSync(path.join(out, 'icon-512.png'), makePNG(512, 96, 165, 250));
-// Maskable: same image, but the manifest declares the purpose.
-// The Android Adaptive Icon system needs a "safe zone" (center 80% visible)
-// — our solid block is fine because there's no critical content in the corners.
-fs.writeFileSync(path.join(out, 'icon-maskable-512.png'), makePNG(512, 96, 165, 250));
+
+fs.writeFileSync(path.join(out, 'icon-192.png'),
+  makeIcon(192, { rounded: 38, maskable: false }));
+fs.writeFileSync(path.join(out, 'icon-512.png'),
+  makeIcon(512, { rounded: 100, maskable: false }));
+fs.writeFileSync(path.join(out, 'icon-maskable-512.png'),
+  makeIcon(512, { rounded: 0, maskable: true }));
 console.log('Wrote icons: 192, 512, maskable-512');
