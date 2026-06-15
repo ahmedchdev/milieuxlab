@@ -830,7 +830,7 @@ function drawStatTile(pdf, x, y, w, h, n, label, numColor, bg) {
 function buildPdfDoc() {
   const { rows, summary, labName, genDate, periodText } = preparePdfRows();
   const pdf = new PDF({
-    size: 'A4', orientation: 'portrait',
+    size: 'A4', orientation: 'landscape',
     margin: { top: 42, right: 42, bottom: 51, left: 42 },
   });
   const PW = pdf.w;
@@ -858,19 +858,16 @@ function buildPdfDoc() {
   drawStatTile(pdf, M + 3 * (tileW + tileGap), tileY, tileW, tileH, summary.ok,      'Conformes',                '#007A5E', '#F8FAFC');
 
   // ----- TABLE -----
-  // Column widths sized to fit BOTH headers (7pt bold) AND data (9pt regular).
-  // No safety margin — the columns are wide enough that real Helvetica glyphs
-  // fit comfortably with room to spare. (Real Helvetica may be ~10% wider than
-  // AFM nominal, so we aim for text being ~70-80% of available width.)
-  // Total content area is 510pt (page width 595 - margins 42*2).
-  // Distribution: wider Milieu (for BHI Chocolat etc.) and wider Jours (for aujourd'hui)
-  // (75, 75, 65, 65, 80, 65, 85) = 510
+  // Landscape A4 gives us 842 - 84 (margins) = 758pt of horizontal space.
+  // Distribution: Milieu and N° de lot are wide enough to hold full text
+  // (e.g. "BHI Chocolat Agar" without truncation); the other columns get
+  // a comfortable minimum. Sums to 758.
   const tableY = 230;
-  const widths = [75, 75, 65, 65, 80, 65, 85];  // sums to 510
+  const widths = [180, 110, 95, 95, 100, 80, 98];  // sums to 758
   const t = pdf.table({ x: M, y: tableY, widths, rowHeight: 18, headerHeight: 24, headerRepeat: true });
   t.header(
     ['Milieu', 'N° de lot', 'Préparation', 'Péremption', 'Renouvellement', 'Jours', 'Statut'],
-    { bg: '#E2E8F0', textColor: '#0A0E14', bold: true, size: 7 }
+    { bg: '#E2E8F0', textColor: '#0A0E14', bold: true, size: 8 }
   );
 
   if (rows.length === 0) {
@@ -884,12 +881,17 @@ function buildPdfDoc() {
     rows.forEach((r, i) => {
       const ps = pdfStatusOf(r.batch);
       const days = daysUntil(new Date(r.batch.expiryDate));
-      const bg = ps.bucket === 'expired' ? '#FEE2E2'
-              : ps.bucket === 'urgent'  ? '#FEF3C7'
-              : (i % 2 === 0 ? '#FFFFFF' : '#F8FAFC');
+      const baseBg = ps.bucket === 'expired' ? '#FEE2E2'
+                   : ps.bucket === 'urgent'  ? '#FEF3C7'
+                   : (i % 2 === 0 ? '#FFFFFF' : '#F8FAFC');
+      // Soft red for the Renouvellement column (index 4), regardless of row status
+      const rowBgs = [baseBg, baseBg, baseBg, baseBg, '#FCE4E4', baseBg, baseBg];
+      const renewalFg = '#7F1D1D';
       const fg = ps.bucket === 'expired' ? '#7F1D1D'
               : ps.bucket === 'urgent'  ? '#78350F'
               : '#0A0E14';
+      // Per-cell text color: keep the renewal date in red even if the row is normal
+      const cellFgs = [fg, fg, fg, fg, renewalFg, fg, fg];
       t.row([
         r.medium.name,
         r.batch.lotNumber || '—',
@@ -898,7 +900,7 @@ function buildPdfDoc() {
         fmtDate(r.batch.renewalAlertDate),
         formatDays(days),
         ps.label,
-      ], { bg, textColor: fg });
+      ], { cellBgs: rowBgs, cellTextColors: cellFgs });
     });
   }
   t.end();

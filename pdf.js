@@ -368,8 +368,18 @@
       const totalW = this.widths.reduce((a, b) => a + b, 0);
       const y = this.cursorY;
 
-      // 1. Background fill
-      if (opts && opts.bg) {
+      // 1. Background fill — either a single `bg` for the whole row,
+      //    or per-cell `cellBgs` array
+      if (opts && opts.cellBgs) {
+        let cx2 = this.x;
+        for (let i = 0; i < this.widths.length; i++) {
+          const cellBg = opts.cellBgs[i];
+          if (cellBg) {
+            pdf.rect(cx2, y, this.widths[i], height, { fill: cellBg });
+          }
+          cx2 += this.widths[i];
+        }
+      } else if (opts && opts.bg) {
         pdf.rect(this.x, y, totalW, height, { fill: opts.bg });
       }
 
@@ -377,14 +387,16 @@
       const size = (opts && opts.size) || (isHeader ? 7 : 9);
       const isBold = (opts && opts.bold) || isHeader;
       const color = (opts && opts.textColor) || '#0A0E14';
+      const cellTextColors = (opts && opts.cellTextColors) || null;
       const yText = y + (height - size) / 2;  // top-left y of the text line
 
       let cx = this.x;
       for (let i = 0; i < cells.length; i++) {
         const w = this.widths[i];
         const cellText = String(cells[i] != null ? cells[i] : '');
+        const cellColor = (cellTextColors && cellTextColors[i]) || color;
         pdf.text(cellText, cx + pad, yText, {
-          size, bold: isBold, color, width: w - 2 * pad,
+          size, bold: isBold, color: cellColor, width: w - 2 * pad,
         });
         cx += w;
       }
