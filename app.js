@@ -714,6 +714,10 @@ function saveBatch(e) {
   const lot = document.getElementById('f-lot').value.trim();
   const code = document.getElementById('f-code').value.trim();
   const supplierExp = document.getElementById('f-supplier-exp').value;
+  const actPhmetre = document.getElementById('f-act-phmetre').value.trim();
+  const actEtuve3 = document.getElementById('f-act-etuve3').value.trim();
+  const actEtuve4 = document.getElementById('f-act-etuve4').value.trim();
+  const cycleSteril = document.getElementById('f-cycle-steril').value.trim();
   const date = document.getElementById('f-date').value;
   const time = document.getElementById('f-time').value;
   const medium = state.media.find(m => m.id === mId);
@@ -728,6 +732,10 @@ function saveBatch(e) {
     lotNumber: lot || null,
     codeInterne: code || null,
     supplierExpiryDate: supplierExp || null,
+    actionPhmetre: actPhmetre || null,
+    actionEtuve3: actEtuve3 || null,
+    actionEtuve4: actEtuve4 || null,
+    cycleSterilisation: cycleSteril || null,
     prepDateTime: prep.toISOString(),
     fertilityResultDate: fertilityResult.toISOString(),
     sterilityResultDate: sterilityResult.toISOString(),
@@ -750,6 +758,10 @@ function editBatch(id) {
   document.getElementById('f-lot').value = b.lotNumber || '';
   document.getElementById('f-code').value = b.codeInterne || '';
   document.getElementById('f-supplier-exp').value = b.supplierExpiryDate || '';
+  document.getElementById('f-act-phmetre').value = b.actionPhmetre || '';
+  document.getElementById('f-act-etuve3').value = b.actionEtuve3 || '';
+  document.getElementById('f-act-etuve4').value = b.actionEtuve4 || '';
+  document.getElementById('f-cycle-steril').value = b.cycleSterilisation || '';
   const d = new Date(b.prepDateTime);
   document.getElementById('f-date').value = d.toISOString().slice(0, 10);
   document.getElementById('f-time').value = fmtTime(d);

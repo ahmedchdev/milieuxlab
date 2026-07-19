@@ -102,7 +102,7 @@ Channels: visual banner on dashboard, OS push notifications (when PWA installed 
 ### Data Model (in localStorage)
 - **Media** { id, name, type, **shelfLifeDays** (Délai de conservation, days), **strains** (array; legacy `strain` string still read), **inhibitionStrains** (array, souches de test d'inhibition), fertilityDelayDays, sterilityFormat, sterilityValue, sterilityMinHours, sterilityMaxHours, **codeInterneRef** (letters-only, optional), **ph, couleur, additif, aspect, fournisseur** (optional text), **coa** ({name,size,importedAt} — bytes in IndexedDB `milieuxlab-files/coa` keyed by medium id), isDefault }
 - **Default media are now deletable.** Deleted default ids are stored in `localStorage['milieuxlab.deletedDefaults.v1']` (state.deletedDefaults) so loadState does NOT re-add them. "Réinitialiser l'application" clears this list.
-- **Batch** { id, mediumId, lotNumber, **codeInterne** (optional, prefilled from medium's codeInterneRef), **supplierExpiryDate** (date de péremption fournisseur, optional), prepDateTime, fertilityResultDate, sterilityResultDate, expiryDate, renewalAlertDate }
+- **Batch** { id, mediumId, lotNumber, **codeInterne** (optional), **supplierExpiryDate** (péremption fournisseur, optional), **actionPhmetre, actionEtuve3, actionEtuve4, cycleSterilisation** (optional text, traçabilité), prepDateTime, fertilityResultDate, sterilityResultDate, expiryDate, renewalAlertDate }
 - **Settings** { browserNotifications, showExpired, labName }
 
 ### Media Management Rules
@@ -428,3 +428,8 @@ None.
 - Also fixed the register preview subtitle to show the real per-medium shelf life (was hardcoded 30/15).
 - SW cache v14 → v15
 - Verified: node --check; 19/19 DOM tests (inhibition strains save/prefill, deletable defaults + no-resurrect on reload, supplier expiry save/prefill, card has no badge + both buttons + no .blue + inhibition row).
+
+### 2026-07-19 — Session 22 — 4 champs de traçabilité sur "Nouvelle préparation"
+- Added 4 optional text fields below "Heure de préparation" (before the Dates calculées block): Numéro d'action log book pH mètre (`f-act-phmetre`), Numéro d'action étuve 3 (`f-act-etuve3`), Numéro d'action étuve 4 (`f-act-etuve4`), Numéro de cycle de stérilisation (`f-cycle-steril`)
+- Stored on the batch (actionPhmetre / actionEtuve3 / actionEtuve4 / cycleSterilisation), prefilled on edit. Same field style. Rest unchanged.
+- SW cache v15 → v16
