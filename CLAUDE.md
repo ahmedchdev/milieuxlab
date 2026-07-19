@@ -366,3 +366,8 @@ None.
 - Close via × button or backdrop tap
 - SW cache v7 → v8
 - Verified: `node --check` + 15/15 DOM tests (per-category filtering exact, empty state, open/close)
+
+### 2026-07-19 — Session 14 — Milieux page: "Ajouter" button moved to top
+- "Ajouter un milieu personnalisé" button now sits at the TOP of the Milieux view (was below the list)
+- `media-form-wrap` moved directly under the button, media list below — the add/edit form opens right where the button is (showMediaForm's scrollIntoView still centers it for edits)
+- SW cache v8 → v9
