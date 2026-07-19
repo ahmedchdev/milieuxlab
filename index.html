@@ -407,22 +407,34 @@
             </div>
             <div class="field">
               <label class="field-label">Référence code interne <span class="field-optional">(optionnel, lettres)</span></label>
-              <input type="text" id="m-code-ref" class="field-input" placeholder="Ex. TSA" autocomplete="off" maxlength="8" />
-              <span class="field-hint">Ces lettres pré-rempliront le « Code interne » lors de l'enregistrement d'un lot de ce milieu.</span>
+              <input type="text" id="m-code-ref" class="field-input" autocomplete="off" maxlength="8" />
             </div>
             <div class="field">
               <label class="field-label">Type</label>
               <select id="m-type" class="field-input" required>
-                <option value="solid">Solide (gélose) — 30 jours</option>
-                <option value="broth">Liquide (bouillon) — 15 jours</option>
+                <option value="solid">Solide (gélose)</option>
+                <option value="broth">Liquide (bouillon)</option>
               </select>
             </div>
             <div class="field">
-              <label class="field-label">Souche de test fertilité</label>
-              <input type="text" id="m-strain" class="field-input" required placeholder="Ex. H. influenzae ATCC 10211" />
+              <label class="field-label">Délai de conservation</label>
+              <select id="m-shelf" class="field-input" required>
+                <option value="15">15 jours</option>
+                <option value="30">1 mois</option>
+                <option value="60">2 mois</option>
+                <option value="90">3 mois</option>
+                <option value="120">4 mois</option>
+                <option value="150">5 mois</option>
+                <option value="180">6 mois</option>
+              </select>
             </div>
             <div class="field">
-              <label class="field-label">Délai fertilité (jours)</label>
+              <label class="field-label">Souche(s) de test fertilité</label>
+              <div id="m-strains-list" class="strains-list"></div>
+              <button type="button" class="strains-add" id="m-strain-add">+ Ajouter une souche</button>
+            </div>
+            <div class="field">
+              <label class="field-label">Résultat test de fertilité après <span class="field-optional">(jours)</span></label>
               <input type="number" id="m-fert" class="field-input" required min="0" step="1" placeholder="Ex. 5" />
             </div>
             <div class="field">
@@ -447,6 +459,40 @@
                   <label class="field-label">Max (heures)</label>
                   <input type="number" id="m-max" class="field-input" min="0" step="1" placeholder="Ex. 72" />
                 </div>
+              </div>
+            </div>
+            <div class="field-row">
+              <div>
+                <label class="field-label">pH du milieu <span class="field-optional">(optionnel)</span></label>
+                <input type="text" id="m-ph" class="field-input" autocomplete="off" placeholder="Ex. 7,2" />
+              </div>
+              <div>
+                <label class="field-label">Couleur <span class="field-optional">(optionnel)</span></label>
+                <input type="text" id="m-couleur" class="field-input" autocomplete="off" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label">Additif <span class="field-optional">(optionnel)</span></label>
+              <input type="text" id="m-additif" class="field-input" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label class="field-label">Aspect <span class="field-optional">(optionnel)</span></label>
+              <input type="text" id="m-aspect" class="field-input" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label class="field-label">Fournisseur <span class="field-optional">(optionnel)</span></label>
+              <input type="text" id="m-fournisseur" class="field-input" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label class="field-label">Certificat d'analyse (CoA) <span class="field-optional">(PDF, optionnel)</span></label>
+              <input type="file" id="m-coa-file" accept="application/pdf,.pdf" hidden />
+              <div class="coa-row">
+                <button type="button" class="btn btn-secondary btn-sm" id="m-coa-import">Importer un CoA</button>
+                <span class="coa-status" id="m-coa-status">Aucun fichier</span>
+              </div>
+              <div class="coa-actions hidden" id="m-coa-actions">
+                <button type="button" class="btn btn-ghost btn-sm" id="m-coa-view">Voir le CoA</button>
+                <button type="button" class="btn btn-ghost btn-sm coa-remove" id="m-coa-remove">Retirer</button>
               </div>
             </div>
             <button type="submit" class="btn btn-primary btn-block">Enregistrer le milieu</button>
@@ -635,6 +681,21 @@
     </div>
   </div>
 
+  <!-- CoA (Certificat d'analyse) inline viewer -->
+  <div id="coa-viewer-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="coa-viewer-title">
+    <div class="modal-card coa-viewer-card">
+      <button class="ios-modal-close" id="coa-viewer-close" type="button" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <h3 class="day-details-title" id="coa-viewer-title">Certificat d'analyse</h3>
+      <p class="day-details-sub" id="coa-viewer-sub">—</p>
+      <div class="coa-pages" id="coa-viewer-pages"></div>
+    </div>
+  </div>
+
   <!-- PDF export filter modal -->
   <div id="pdf-filters" class="modal hidden">
     <div class="modal-card">
@@ -673,6 +734,7 @@
   </div>
 
   <script src="pdf.js"></script>
+  <script src="vendor/pdfjs/pdf.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

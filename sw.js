@@ -6,13 +6,15 @@
      3. Notification click → open the app
    ============================================================ */
 
-const CACHE_NAME = 'milieuxlab-v13';
+const CACHE_NAME = 'milieuxlab-v14';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './pdf.js',
+  './vendor/pdfjs/pdf.min.js',
+  './vendor/pdfjs/pdf.worker.min.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',

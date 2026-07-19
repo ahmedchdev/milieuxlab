@@ -16,14 +16,14 @@ const THEME_KEY = 'milieuxlab.theme.v1';
 const NOTIF_POLL_MS = 5 * 60 * 1000;  // re-check every 5 minutes
 
 const DEFAULT_MEDIA = [
-  { id: 'm_tsa',       name: 'TSA',                          type: 'solid', strain: 'S. aureus ATCC 6538',         fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 5, codeInterneRef: 'TSA', isDefault: true },
-  { id: 'm_macconkey', name: 'MacConkey Agar',               type: 'solid', strain: 'E. coli ATCC 8739',           fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 72, codeInterneRef: 'MAC', isDefault: true },
-  { id: 'm_sabouraud', name: 'Sabouraud',                    type: 'solid', strain: 'C. albicans ATCC 10231',      fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 5, codeInterneRef: 'SAB', isDefault: true },
-  { id: 'm_mh',        name: 'Mueller-Hinton',               type: 'solid', strain: 'S. aureus ATCC 25923',        fertilityDelayDays: 3, sterilityFormat: 'days',  sterilityValue: 5, codeInterneRef: 'MH', isDefault: true },
-  { id: 'm_tsb',       name: 'TSB (Tryptic Soy Broth)',      type: 'broth', strain: 'S. aureus ATCC 6538',         fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 14, codeInterneRef: 'TSB', isDefault: true },
-  { id: 'm_bhi',       name: 'BHI (Brain Heart Infusion)',   type: 'broth', strain: 'S. aureus ATCC 6538',         fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 14, codeInterneRef: 'BHI', isDefault: true },
-  { id: 'm_xld',       name: 'XLD Agar',                     type: 'solid', strain: 'Salmonella typhimurium',      fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 24, codeInterneRef: 'XLD', isDefault: true },
-  { id: 'm_pbs',       name: 'Phosphate Buffer Solution',   type: 'broth', strain: 'E. coli ATCC 8739',           fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 24, codeInterneRef: 'PBS', isDefault: true },
+  { id: 'm_tsa',       name: 'TSA',                          type: 'solid', strains: ['S. aureus ATCC 6538'],    shelfLifeDays: 30, fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 5, codeInterneRef: 'TSA', isDefault: true },
+  { id: 'm_macconkey', name: 'MacConkey Agar',               type: 'solid', strains: ['E. coli ATCC 8739'],      shelfLifeDays: 30, fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 72, codeInterneRef: 'MAC', isDefault: true },
+  { id: 'm_sabouraud', name: 'Sabouraud',                    type: 'solid', strains: ['C. albicans ATCC 10231'], shelfLifeDays: 30, fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 5, codeInterneRef: 'SAB', isDefault: true },
+  { id: 'm_mh',        name: 'Mueller-Hinton',               type: 'solid', strains: ['S. aureus ATCC 25923'],   shelfLifeDays: 30, fertilityDelayDays: 3, sterilityFormat: 'days',  sterilityValue: 5, codeInterneRef: 'MH', isDefault: true },
+  { id: 'm_tsb',       name: 'TSB (Tryptic Soy Broth)',      type: 'broth', strains: ['S. aureus ATCC 6538'],    shelfLifeDays: 15, fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 14, codeInterneRef: 'TSB', isDefault: true },
+  { id: 'm_bhi',       name: 'BHI (Brain Heart Infusion)',   type: 'broth', strains: ['S. aureus ATCC 6538'],    shelfLifeDays: 15, fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 14, codeInterneRef: 'BHI', isDefault: true },
+  { id: 'm_xld',       name: 'XLD Agar',                     type: 'solid', strains: ['Salmonella typhimurium'], shelfLifeDays: 30, fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 24, codeInterneRef: 'XLD', isDefault: true },
+  { id: 'm_pbs',       name: 'Phosphate Buffer Solution',   type: 'broth', strains: ['E. coli ATCC 8739'],      shelfLifeDays: 15, fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 24, codeInterneRef: 'PBS', isDefault: true },
 ];
 
 const DEFAULT_SETTINGS = { browserNotifications: false, showExpired: false, labName: '' };
@@ -47,12 +47,13 @@ function loadState() {
     DEFAULT_MEDIA.forEach(dm => {
       if (!state.media.find(x => x.id === dm.id)) state.media.unshift(dm);
     });
-    // Backfill codeInterneRef on default media saved before this field existed
+    // Backfill fields added after first release, on default media saved before they existed
     DEFAULT_MEDIA.forEach(dm => {
       const existing = state.media.find(x => x.id === dm.id);
-      if (existing && existing.codeInterneRef == null && dm.codeInterneRef) {
-        existing.codeInterneRef = dm.codeInterneRef;
-      }
+      if (!existing) return;
+      if (existing.codeInterneRef == null && dm.codeInterneRef) existing.codeInterneRef = dm.codeInterneRef;
+      if (existing.shelfLifeDays == null && dm.shelfLifeDays) existing.shelfLifeDays = dm.shelfLifeDays;
+      if (!Array.isArray(existing.strains)) existing.strains = existing.strain ? [existing.strain] : (dm.strains ? dm.strains.slice() : []);
     });
 
     const b = localStorage.getItem(STORAGE.BATCHES);
@@ -107,9 +108,28 @@ function computeBatchDates(medium, prepDateTime) {
   const prep = new Date(prepDateTime);
   const fertilityResult = addDays(prep, medium.fertilityDelayDays);
   const sterilityResult = addHours(prep, getSterilityDurationHours(medium));
-  const expiry = addDays(startOfDay(prep), SHELF_LIFE[medium.type]);
+  const expiry = addDays(startOfDay(prep), mediumShelfDays(medium));
   const renewalAlert = addDays(startOfDay(expiry), -(medium.fertilityDelayDays + BUFFER_DAYS));
   return { fertilityResult, sterilityResult, expiry, renewalAlert };
+}
+
+// Shelf life in days. Uses the per-medium "Délai de conservation" when set,
+// else falls back to the legacy Type-based value (solid 30 / broth 15).
+function mediumShelfDays(medium) {
+  return (typeof medium.shelfLifeDays === 'number' && medium.shelfLifeDays > 0)
+    ? medium.shelfLifeDays
+    : SHELF_LIFE[medium.type];
+}
+
+// Strains: stored as an array (medium.strains); legacy media used medium.strain (string).
+function mediumStrains(medium) {
+  if (Array.isArray(medium.strains) && medium.strains.length) return medium.strains.filter(Boolean);
+  if (medium.strain) return [medium.strain];
+  return [];
+}
+function mediumStrainText(medium) {
+  const s = mediumStrains(medium);
+  return s.length ? s.join(' / ') : '—';
 }
 
 function getSterilityDurationHours(medium) {
@@ -361,7 +381,7 @@ function openStatDetails(category) {
         <div class="day-detail-head">
           <div>
             <div class="day-detail-name">${escapeHtml(medium.name)}</div>
-            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+            <div class="day-detail-meta">${escapeHtml(mediumStrainText(medium))}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
           </div>
           <span class="day-detail-tag ${isBroth ? 'broth' : ''}">${isBroth ? 'BOUILLON' : 'SOLIDE'}</span>
         </div>
@@ -419,7 +439,7 @@ function renderBatchCard(batch) {
           <div class="batch-name">${escapeHtml(medium.name)}</div>
           <div class="batch-meta">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3"></circle></svg>
-            <span>${escapeHtml(medium.strain)}</span>${batch.codeInterne ? '<span style="opacity:0.5">·</span><span>' + escapeHtml(batch.codeInterne) + '</span>' : ''}${batch.lotNumber ? '<span style="opacity:0.5">·</span><span>' + escapeHtml(batch.lotNumber) + '</span>' : ''}
+            <span>${escapeHtml(mediumStrainText(medium))}</span>${batch.codeInterne ? '<span style="opacity:0.5">·</span><span>' + escapeHtml(batch.codeInterne) + '</span>' : ''}${batch.lotNumber ? '<span style="opacity:0.5">·</span><span>' + escapeHtml(batch.lotNumber) + '</span>' : ''}
           </div>
         </div>
         ${tag}
@@ -530,6 +550,14 @@ function renderMedia() {
   document.getElementById('media-count').textContent = `${state.media.length} milieux`;
   list.innerHTML = state.media.map(m => {
     const isBroth = m.type === 'broth';
+    const shelf = mediumShelfDays(m);
+    const strainsTxt = mediumStrainText(m);
+    const strainCount = mediumStrains(m).length;
+    // Optional extra fields, only rendered when filled
+    const extras = [
+      ['pH', m.ph], ['Couleur', m.couleur], ['Additif', m.additif],
+      ['Aspect', m.aspect], ['Fournisseur', m.fournisseur],
+    ].filter(([, v]) => v && String(v).trim());
     return `
       <div class="media-card ${isBroth ? 'broth' : ''}">
         <div class="media-head">
@@ -539,20 +567,34 @@ function renderMedia() {
         <div class="media-grid">
           <div>
             <span class="lbl">Type</span>
-            <span class="val">${m.type === 'solid' ? 'Solide · 30 j' : 'Bouillon · 15 j'}</span>
+            <span class="val">${m.type === 'solid' ? 'Solide' : 'Bouillon'}</span>
           </div>
           <div>
-            <span class="lbl">Fertilité</span>
+            <span class="lbl">Conservation</span>
+            <span class="val">${shelf} jour${shelf > 1 ? 's' : ''}</span>
+          </div>
+          <div>
+            <span class="lbl">Fertilité après</span>
             <span class="val">${m.fertilityDelayDays} jour${m.fertilityDelayDays > 1 ? 's' : ''}</span>
           </div>
-          <div style="grid-column: 1/-1">
-            <span class="lbl">Souche</span>
-            <span class="val">${escapeHtml(m.strain)}</span>
-          </div>
-          <div style="grid-column: 1/-1">
+          <div>
             <span class="lbl">Stérilité</span>
             <span class="val blue">${getSterilityDisplay(m)}</span>
           </div>
+          <div style="grid-column: 1/-1">
+            <span class="lbl">Souche${strainCount > 1 ? 's' : ''}</span>
+            <span class="val">${escapeHtml(strainsTxt)}</span>
+          </div>
+          ${extras.map(([lbl, v]) => `
+          <div style="grid-column: 1/-1">
+            <span class="lbl">${lbl}</span>
+            <span class="val">${escapeHtml(String(v))}</span>
+          </div>`).join('')}
+          ${m.coa ? `
+          <div style="grid-column: 1/-1">
+            <span class="lbl">Certificat d'analyse</span>
+            <span class="val"><button class="coa-link" data-mcoa="${m.id}">📄 ${escapeHtml(m.coa.name || 'Voir le CoA')}</button></span>
+          </div>` : ''}
         </div>
         <div class="media-foot">
           <button class="icon-btn" data-medit="${m.id}">Modifier</button>
@@ -574,7 +616,8 @@ function showMediaForm(medium) {
     document.getElementById('m-name').value = medium.name;
     document.getElementById('m-code-ref').value = medium.codeInterneRef || '';
     document.getElementById('m-type').value = medium.type;
-    document.getElementById('m-strain').value = medium.strain;
+    document.getElementById('m-shelf').value = String(mediumShelfDays(medium));
+    renderStrainRows(mediumStrains(medium));
     document.getElementById('m-fert').value = medium.fertilityDelayDays;
     const fmt = medium.sterilityFormat;
     document.querySelector(`input[name="m-fmt"][value="${fmt}"]`).checked = true;
@@ -584,12 +627,21 @@ function showMediaForm(medium) {
     } else {
       document.getElementById('m-single').value = medium.sterilityValue || '';
     }
+    document.getElementById('m-ph').value = medium.ph || '';
+    document.getElementById('m-couleur').value = medium.couleur || '';
+    document.getElementById('m-additif').value = medium.additif || '';
+    document.getElementById('m-aspect').value = medium.aspect || '';
+    document.getElementById('m-fournisseur').value = medium.fournisseur || '';
+    coaFormReset(medium.coa || null);
     updateMediaFormFields();
   } else {
     title.textContent = 'Nouveau milieu';
     form.reset();
     document.getElementById('m-id').value = '';
+    document.getElementById('m-shelf').value = '30';
+    renderStrainRows([]);
     document.querySelector('input[name="m-fmt"][value="days"]').checked = true;
+    coaFormReset(null);
     updateMediaFormFields();
   }
   wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -700,13 +752,28 @@ function saveMedia(e) {
   const id = document.getElementById('m-id').value;
   const name = document.getElementById('m-name').value.trim();
   const type = document.getElementById('m-type').value;
-  const strain = document.getElementById('m-strain').value.trim();
+  const shelfLifeDays = parseInt(document.getElementById('m-shelf').value, 10);
+  const strains = collectStrains();
   const codeRef = document.getElementById('m-code-ref').value.replace(/[^A-Za-z]/g, '').toUpperCase();
   const fert = parseInt(document.getElementById('m-fert').value, 10);
   const fmt = document.querySelector('input[name="m-fmt"]:checked').value;
-  if (!name || !strain || isNaN(fert) || fert < 0) return toast('Veuillez remplir tous les champs.', 'error');
+  if (!name || strains.length === 0 || isNaN(fert) || fert < 0) {
+    return toast('Veuillez remplir le nom, au moins une souche et le délai de fertilité.', 'error');
+  }
+  if (isNaN(shelfLifeDays) || shelfLifeDays <= 0) return toast('Veuillez choisir un délai de conservation.', 'error');
 
-  const data = { name, type, strain, codeInterneRef: codeRef || null, fertilityDelayDays: fert, sterilityFormat: fmt, isDefault: false };
+  const data = {
+    name, type, shelfLifeDays, strains,
+    codeInterneRef: codeRef || null,
+    fertilityDelayDays: fert,
+    sterilityFormat: fmt,
+    ph: document.getElementById('m-ph').value.trim() || null,
+    couleur: document.getElementById('m-couleur').value.trim() || null,
+    additif: document.getElementById('m-additif').value.trim() || null,
+    aspect: document.getElementById('m-aspect').value.trim() || null,
+    fournisseur: document.getElementById('m-fournisseur').value.trim() || null,
+    isDefault: false,
+  };
   if (fmt === 'range') {
     const min = parseInt(document.getElementById('m-min').value, 10);
     const max = parseInt(document.getElementById('m-max').value, 10);
@@ -719,13 +786,23 @@ function saveMedia(e) {
     data.sterilityValue = v;
   }
 
+  let target;
   if (id) {
     const existing = state.media.find(m => m.id === id);
-    if (existing) Object.assign(existing, data);
+    if (existing) {
+      const wasDefault = existing.isDefault;        // editing a default keeps it default/protected
+      const prevStrain = existing.strain;
+      Object.assign(existing, data);
+      existing.isDefault = wasDefault;
+      if ('strain' in existing) delete existing.strain;  // migrate legacy single-strain field
+      target = existing;
+    }
   } else {
     data.id = 'm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
     state.media.push(data);
+    target = data;
   }
+  if (target) applyCoaChange(target);   // persists + re-renders when the IDB write settles
   persist();
   document.getElementById('media-form-wrap').classList.add('hidden');
   renderMedia();
@@ -743,9 +820,234 @@ function deleteMedia(id) {
   confirmAction(`Supprimer "${m.name}" ?`, 'Ce milieu personnalisé sera supprimé définitivement.', () => {
     state.media = state.media.filter(x => x.id !== id);
     persist();
+    idbDeleteCoa(id).catch(() => {});   // clean up any stored CoA
     renderMedia();
     toast('Milieu supprimé.', 'success');
   });
+}
+
+/* ============================================================
+   MEDIA FORM — souches multiples
+   ============================================================ */
+
+function renderStrainRows(strains) {
+  const list = document.getElementById('m-strains-list');
+  if (!list) return;
+  list.innerHTML = '';
+  const arr = (strains && strains.length) ? strains : [''];
+  arr.forEach(v => addStrainRow(v));
+}
+
+function addStrainRow(value) {
+  const list = document.getElementById('m-strains-list');
+  if (!list) return;
+  const row = document.createElement('div');
+  row.className = 'strain-row';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'field-input strain-input';
+  input.placeholder = 'Ex. H. influenzae ATCC 10211';
+  input.value = value || '';
+  const rm = document.createElement('button');
+  rm.type = 'button';
+  rm.className = 'strain-remove';
+  rm.setAttribute('aria-label', 'Retirer cette souche');
+  rm.textContent = '×';
+  rm.addEventListener('click', () => {
+    const rows = list.querySelectorAll('.strain-row');
+    if (rows.length > 1) row.remove();
+    else input.value = '';   // always keep at least one row
+  });
+  row.appendChild(input);
+  row.appendChild(rm);
+  list.appendChild(row);
+}
+
+function collectStrains() {
+  const list = document.getElementById('m-strains-list');
+  if (!list) return [];
+  return Array.from(list.querySelectorAll('.strain-input')).map(i => i.value.trim()).filter(Boolean);
+}
+
+/* ============================================================
+   MEDIA FORM — CoA (Certificat d'analyse) : import PDF + lecture inline
+   Fichier stocké dans IndexedDB (clé = id du milieu). Métadonnées dans le milieu.
+   ============================================================ */
+
+let _formCoaAction = null;   // null | 'set' | 'remove'  (for the current form session)
+let _formCoaBlob   = null;   // Blob when action === 'set'
+let _formCoaMeta   = null;   // { name, size } — pending OR existing saved meta
+
+function fmtBytes(n) {
+  if (n == null) return '';
+  if (n < 1024) return n + ' o';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' Ko';
+  return (n / 1024 / 1024).toFixed(1) + ' Mo';
+}
+
+function coaFormReset(existingMeta) {
+  _formCoaAction = null;
+  _formCoaBlob = null;
+  _formCoaMeta = existingMeta || null;
+  const fileInput = document.getElementById('m-coa-file');
+  if (fileInput) fileInput.value = '';
+  renderCoaFormUI();
+}
+
+function currentFormCoaMeta() {
+  if (_formCoaAction === 'remove') return null;
+  return _formCoaMeta;
+}
+
+function renderCoaFormUI() {
+  const status = document.getElementById('m-coa-status');
+  const actions = document.getElementById('m-coa-actions');
+  if (!status || !actions) return;
+  const meta = currentFormCoaMeta();
+  if (meta) {
+    status.textContent = meta.name + (meta.size ? ` (${fmtBytes(meta.size)})` : '');
+    actions.classList.remove('hidden');
+  } else {
+    status.textContent = 'Aucun fichier';
+    actions.classList.add('hidden');
+  }
+}
+
+function onCoaFileChosen(file) {
+  if (!file) return;
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  if (!isPdf) { toast('Le CoA doit être un fichier PDF.', 'error'); return; }
+  if (file.size > 20 * 1024 * 1024) { toast('Fichier trop volumineux (max 20 Mo).', 'error'); return; }
+  _formCoaAction = 'set';
+  _formCoaBlob = file;
+  _formCoaMeta = { name: file.name, size: file.size };
+  renderCoaFormUI();
+  toast('CoA prêt — enregistrez le milieu pour le sauvegarder.', 'success');
+}
+
+function coaFormMarkRemove() {
+  _formCoaAction = 'remove';
+  _formCoaBlob = null;
+  const fileInput = document.getElementById('m-coa-file');
+  if (fileInput) fileInput.value = '';
+  renderCoaFormUI();
+}
+
+function viewFormCoa() {
+  const meta = currentFormCoaMeta();
+  if (!meta) return;
+  if (_formCoaAction === 'set' && _formCoaBlob) {
+    openCoaViewerFromBlob(_formCoaBlob, meta.name);
+  } else {
+    const id = document.getElementById('m-id').value;
+    if (id) openCoaViewer(id, meta.name);
+  }
+}
+
+// Called from saveMedia: persist the pending CoA change for this medium.
+function applyCoaChange(medium) {
+  if (_formCoaAction === 'set' && _formCoaBlob) {
+    const blob = _formCoaBlob, meta = _formCoaMeta;
+    idbPutCoa(medium.id, blob).then(() => {
+      medium.coa = { name: meta.name, size: meta.size, importedAt: new Date().toISOString() };
+      persist();
+      renderMedia();
+    }).catch(err => { console.warn('CoA save failed', err); toast('Échec de l\'enregistrement du CoA.', 'error'); });
+  } else if (_formCoaAction === 'remove') {
+    idbDeleteCoa(medium.id).catch(() => {});
+    medium.coa = null;
+  }
+}
+
+/* --- IndexedDB (fichiers CoA) --- */
+const COA_DB = 'milieuxlab-files';
+const COA_STORE = 'coa';
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    if (!('indexedDB' in window)) return reject(new Error('IndexedDB indisponible'));
+    const req = indexedDB.open(COA_DB, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(COA_STORE)) db.createObjectStore(COA_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+function idbPutCoa(key, blob) {
+  return idbOpen().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(COA_STORE, 'readwrite');
+    tx.objectStore(COA_STORE).put(blob, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+function idbGetCoa(key) {
+  return idbOpen().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(COA_STORE, 'readonly');
+    const r = tx.objectStore(COA_STORE).get(key);
+    r.onsuccess = () => resolve(r.result || null);
+    r.onerror = () => reject(r.error);
+  }));
+}
+function idbDeleteCoa(key) {
+  return idbOpen().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(COA_STORE, 'readwrite');
+    tx.objectStore(COA_STORE).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+
+/* --- Lecteur PDF inline (pdf.js) --- */
+async function openCoaViewer(mediumId, name) {
+  try {
+    const blob = await idbGetCoa(mediumId);
+    if (!blob) { toast('CoA introuvable.', 'error'); return; }
+    openCoaViewerFromBlob(blob, name);
+  } catch (e) { console.warn(e); toast('Impossible d\'ouvrir le CoA.', 'error'); }
+}
+
+async function openCoaViewerFromBlob(blob, name) {
+  const modal = document.getElementById('coa-viewer-modal');
+  const pagesEl = document.getElementById('coa-viewer-pages');
+  const sub = document.getElementById('coa-viewer-sub');
+  if (!modal || !pagesEl) return;
+  pagesEl.innerHTML = '<div class="coa-loading">Chargement…</div>';
+  if (sub) sub.textContent = name || '';
+  modal.classList.remove('hidden');
+  try {
+    if (!window.pdfjsLib) { pagesEl.innerHTML = '<div class="coa-loading">Lecteur PDF indisponible.</div>'; return; }
+    const buf = await blob.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    if (sub) sub.textContent = (name ? name + ' · ' : '') + pdf.numPages + ' page' + (pdf.numPages > 1 ? 's' : '');
+    pagesEl.innerHTML = '';
+    const targetW = Math.min(pagesEl.clientWidth || 700, 1100);
+    const dpr = window.devicePixelRatio || 1;
+    for (let n = 1; n <= pdf.numPages; n++) {
+      const page = await pdf.getPage(n);
+      const base = page.getViewport({ scale: 1 });
+      const vp = page.getViewport({ scale: (targetW / base.width) * dpr });
+      const canvas = document.createElement('canvas');
+      canvas.className = 'coa-page';
+      canvas.width = vp.width;
+      canvas.height = vp.height;
+      canvas.style.width = '100%';
+      pagesEl.appendChild(canvas);
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+    }
+  } catch (e) {
+    console.warn('CoA render failed', e);
+    pagesEl.innerHTML = '<div class="coa-loading">Impossible d\'afficher ce PDF.</div>';
+  }
+}
+
+function closeCoaViewer() {
+  const modal = document.getElementById('coa-viewer-modal');
+  if (modal) modal.classList.add('hidden');
+  const pagesEl = document.getElementById('coa-viewer-pages');
+  if (pagesEl) pagesEl.innerHTML = '';
 }
 
 /* ============================================================
@@ -1107,6 +1409,20 @@ function init() {
   document.querySelectorAll('input[name="m-fmt"]').forEach(r => r.addEventListener('change', updateMediaFormFields));
   document.getElementById('media-form').addEventListener('submit', saveMedia);
 
+  // Souches multiples
+  document.getElementById('m-strain-add').addEventListener('click', () => addStrainRow(''));
+
+  // CoA import + lecteur inline
+  if (window.pdfjsLib) { try { pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.min.js'; } catch (e) {} }
+  document.getElementById('m-coa-import').addEventListener('click', () => document.getElementById('m-coa-file').click());
+  document.getElementById('m-coa-file').addEventListener('change', (e) => onCoaFileChosen(e.target.files && e.target.files[0]));
+  document.getElementById('m-coa-view').addEventListener('click', viewFormCoa);
+  document.getElementById('m-coa-remove').addEventListener('click', coaFormMarkRemove);
+  const coaClose = document.getElementById('coa-viewer-close');
+  if (coaClose) coaClose.addEventListener('click', closeCoaViewer);
+  const coaModal = document.getElementById('coa-viewer-modal');
+  if (coaModal) coaModal.addEventListener('click', (e) => { if (e.target === coaModal) closeCoaViewer(); });
+
   // List event delegation
   document.getElementById('batches-list').addEventListener('click', e => {
     const editId = e.target.dataset.edit;
@@ -1117,8 +1433,14 @@ function init() {
   document.getElementById('media-list').addEventListener('click', e => {
     const editId = e.target.dataset.medit;
     const delId  = e.target.dataset.mdel;
+    const coaEl  = e.target.closest ? e.target.closest('[data-mcoa]') : null;
     if (editId) editMedia(editId);
     if (delId)  deleteMedia(delId);
+    if (coaEl) {
+      const cid = coaEl.dataset.mcoa;
+      const m = state.media.find(x => x.id === cid);
+      openCoaViewer(cid, m && m.coa ? m.coa.name : '');
+    }
   });
 
   // Settings
@@ -1756,7 +2078,7 @@ function openDayDetails(date) {
         <div class="day-detail-head">
           <div>
             <div class="day-detail-name">${escapeHtml(medium.name)}</div>
-            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+            <div class="day-detail-meta">${escapeHtml(mediumStrainText(medium))}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
           </div>
           <span class="day-detail-tag ${isBroth ? 'broth' : ''}">ENREGISTRÉ</span>
         </div>
@@ -1785,7 +2107,7 @@ function openDayDetails(date) {
         <div class="day-detail-head">
           <div>
             <div class="day-detail-name">${escapeHtml(medium.name)}</div>
-            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+            <div class="day-detail-meta">${escapeHtml(mediumStrainText(medium))}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
           </div>
           <span class="day-detail-tag ${isBroth ? 'broth' : ''}">${isBroth ? 'BOUILLON' : 'SOLIDE'}</span>
         </div>
@@ -1825,7 +2147,7 @@ function openDayDetails(date) {
         <div class="day-detail-head">
           <div>
             <div class="day-detail-name">${escapeHtml(medium.name)}</div>
-            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+            <div class="day-detail-meta">${escapeHtml(mediumStrainText(medium))}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
           </div>
           <span class="day-detail-tag ${isBroth ? 'broth' : ''}">EXPIRE</span>
         </div>
@@ -1852,7 +2174,7 @@ function openDayDetails(date) {
         <div class="day-detail-head">
           <div>
             <div class="day-detail-name">${escapeHtml(medium.name)}</div>
-            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+            <div class="day-detail-meta">${escapeHtml(mediumStrainText(medium))}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
           </div>
           <span class="day-detail-tag ${isBroth ? 'broth' : ''}">FERTILITÉ</span>
         </div>
@@ -1879,7 +2201,7 @@ function openDayDetails(date) {
         <div class="day-detail-head">
           <div>
             <div class="day-detail-name">${escapeHtml(medium.name)}</div>
-            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+            <div class="day-detail-meta">${escapeHtml(mediumStrainText(medium))}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
           </div>
           <span class="day-detail-tag ${isBroth ? 'broth' : ''}">STÉRILITÉ</span>
         </div>

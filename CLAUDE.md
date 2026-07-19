@@ -18,9 +18,8 @@
 
 ### Core Business Logic
 
-**Shelf life**
-- Solid (agar) = 30 days
-- Broth = 15 days
+**Shelf life ("Délai de conservation")** — since session 20, per-medium, chosen from a dropdown (15 j, 1–6 mois → 15/30/60/90/120/150/180 days). Stored as `medium.shelfLifeDays`. `mediumShelfDays(m)` returns it, falling back to the legacy Type-based value (Solid 30 / Broth 15) for media saved before the field existed. Expiry = prep + mediumShelfDays. The Type field remains (solid/broth tag, colors, sterility) but no longer drives shelf life.
+- Legacy default: Solid (agar) = 30 days, Broth = 15 days
 
 **Sterility duration formats** (3 supported per medium)
 - Fixed (days) — single value
@@ -101,7 +100,7 @@ Channels: visual banner on dashboard, OS push notifications (when PWA installed 
 - Hidden only for the SAME day AND the SAME alert set — reappears next day, or immediately if any new alert arrives (safety first)
 
 ### Data Model (in localStorage)
-- **Media** { id, name, type, shelfLifeDays, strain, fertilityDelayDays, sterilityFormat, sterilityValue, sterilityMinHours, sterilityMaxHours, **codeInterneRef** (letters-only reference, optional), isDefault }
+- **Media** { id, name, type, **shelfLifeDays** (Délai de conservation, days), **strains** (array; legacy `strain` string still read), fertilityDelayDays, sterilityFormat, sterilityValue, sterilityMinHours, sterilityMaxHours, **codeInterneRef** (letters-only, optional), **ph, couleur, additif, aspect, fournisseur** (optional text), **coa** ({name,size,importedAt} — bytes in IndexedDB `milieuxlab-files/coa` keyed by medium id), isDefault }
 - **Batch** { id, mediumId, lotNumber, **codeInterne** (optional, prefilled from medium's codeInterneRef), prepDate, prepTime, fertilityResultDate, sterilityResultDate, expiryDate, renewalAlertDate }
 - **Settings** { browserNotifications, showExpired, labName }
 
@@ -407,3 +406,16 @@ None.
 - **Fix for the device: uninstall the PWA and reinstall from `https://milieuxlab-psi.vercel.app`** (localStorage data on the dead origin is not migratable)
 - **Cron bug fixed:** `.github/workflows/alerts-cron.yml` was pinging the dead m4tiziddd URL (410 → every scheduled push-check failing). Both the `workflow_dispatch` default and the `APP_URL` fallback now point to `https://milieuxlab-psi.vercel.app`. Endpoint verified: `{"ok":true,...}`
 - **RULE: never hand out or hardcode deployment-specific URLs (`*-<hash>-*-projects.vercel.app`) — always use the production alias `milieuxlab-psi.vercel.app`.**
+
+### 2026-07-19 — Session 20 — "Nouveau milieu" form overhaul + CoA import/viewer
+- Référence code interne: removed placeholder + helper hint (in the media form)
+- Type options: durations removed ("Solide (gélose)", "Liquide (bouillon)")
+- New "Délai de conservation" dropdown (`m-shelf`, 15j/1-6 mois) — DRIVES expiry via `mediumShelfDays()` (fallback to Type for legacy media)
+- Souche(s): dynamic multi-strain list (`m-strains-list` + "+ Ajouter une souche"); `medium.strains` array; helpers `mediumStrains()`/`mediumStrainText()` (join " / "); all display sites updated; legacy `strain` migrated on edit
+- "Délai fertilité (jours)" → "Résultat test de fertilité après"
+- New optional fields: pH (`m-ph`), Couleur, Additif, Aspect, Fournisseur — shown in media card when filled
+- **CoA import (PDF only)** + **inline viewer**: file stored in IndexedDB (`milieuxlab-files`/`coa`, key = medium id), metadata on the medium. Viewer renders each PDF page to a canvas via **vendored Mozilla pdf.js 3.11.174** (`vendor/pdfjs/pdf.min.js` + worker, Apache-2.0). No download — read in-app. Guards: PDF-only, 20 MB max, degrades gracefully if pdf.js/IDB unavailable.
+- Fixed a latent bug: editing a DEFAULT medium no longer demotes it (isDefault preserved)
+- SW precache adds the 2 vendor files; cache v13 → v14
+- Verified: node --check all; CSS balanced; 32/32 DOM tests (multi-strain add/remove/collect, shelf calc + fallback, new fields save/prefill, renderMedia output, CoA form-state). pdf.js render path verified structurally (API symbols present); runtime render not unit-testable in Node.
+- Note: CoA files live only on the device (IndexedDB) — not synced, not in localStorage export.
