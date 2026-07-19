@@ -48,7 +48,7 @@
 | Phosphate Buffer Solution | Broth | E. coli ATCC 8739 | 2d | 18–24h (range) |
 
 ### App Structure — 4 Views
-1. **Dashboard** — alert banner, 4 stat tiles, batch cards with progress bar + color-coded left stripe
+1. **Dashboard** — alert banner, 4 stat tiles (**clickable → popup listing all lots of that category**), batch cards with progress bar + color-coded left stripe
 2. **Register** — new batch form with live-calculated dates preview; **Code interne** field (auto-prefilled from the selected medium's reference, user completes it)
 3. **Media** — list/add/edit/delete media (defaults protected from delete); each medium has a **Référence code interne** (letters only)
 4. **Settings** — lab name, notifications toggle, show-expired toggle, reset, active rules summary
@@ -357,3 +357,12 @@ None.
 - **New:** × close button in the banner title row (`.alerts-banner-close`); `dismissAlertsBanner(sig)` stores `{date, sig}` in `localStorage['milieuxlab.alertsHidden.v1']`; `isAlertsBannerDismissed(sig)` hides the banner only same-day + same alert signature, so it reappears next day or as soon as the alert set changes
 - SW cache bumped v6 → v7 (per the rule)
 - Verified: `node --check` + 9/9 DOM tests (old expired hidden, day-of shown, dismiss persists across re-render, reappears on new alert and next day)
+
+### 2026-07-19 — Session 13 — Clickable stat tiles → category popup
+- The 4 dashboard tiles (Lots actifs / À surveiller / Urgents / Expirés) are now interactive (`data-stat` attr, role=button, tabindex, Enter/Space support, press animation)
+- New `stat-details-modal` (reuses day-details modal CSS classes) — `openStatDetails(category)` lists ALL lots of that category sorted by expiry date, with full details (prep, expiry, renewal, days left, status)
+- Category → status mapping in `STAT_CATEGORIES`: active=[ok, fert-today, ster-today], watch=[soon], urgent=[urgent], expired=[expired]
+- Empty state: "Aucun lot dans cette catégorie."
+- Close via × button or backdrop tap
+- SW cache v7 → v8
+- Verified: `node --check` + 15/15 DOM tests (per-category filtering exact, empty state, open/close)

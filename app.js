@@ -322,6 +322,82 @@ function renderDashboard() {
   }
 }
 
+/* ============================================================
+   STAT TILE DETAILS — popup listing all lots of a category
+   ============================================================ */
+
+const STAT_CATEGORIES = {
+  active:  { title: 'Lots actifs',   codes: ['ok', 'fert-today', 'ster-today'] },
+  watch:   { title: 'À surveiller',  codes: ['soon'] },
+  urgent:  { title: 'Urgents',       codes: ['urgent'] },
+  expired: { title: 'Lots expirés',  codes: ['expired'] },
+};
+
+function openStatDetails(category) {
+  const cfg = STAT_CATEGORIES[category];
+  if (!cfg) return;
+  const modal   = document.getElementById('stat-details-modal');
+  const titleEl = document.getElementById('stat-details-title');
+  const subEl   = document.getElementById('stat-details-sub');
+  const list    = document.getElementById('stat-details-list');
+  if (!modal || !list) return;
+
+  const rows = state.batches
+    .map(b => ({ batch: b, medium: getBatchMedium(b), status: batchStatus(b) }))
+    .filter(({ medium, status }) => medium && cfg.codes.includes(status.code))
+    .sort((a, b) => new Date(a.batch.expiryDate) - new Date(b.batch.expiryDate));
+
+  titleEl.textContent = cfg.title;
+  subEl.textContent = rows.length === 0 ? 'Aucun lot' : `${rows.length} lot${rows.length > 1 ? 's' : ''}`;
+
+  if (rows.length === 0) {
+    list.innerHTML = `<div class="day-detail-empty">Aucun lot dans cette catégorie.</div>`;
+  } else {
+    list.innerHTML = rows.map(({ batch, medium, status }) => {
+      const isBroth = medium.type === 'broth';
+      const daysLeft = daysBetween(new Date(), batch.expiryDate);
+      return `
+      <div class="day-detail-item ${status.cls}">
+        <div class="day-detail-head">
+          <div>
+            <div class="day-detail-name">${escapeHtml(medium.name)}</div>
+            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+          </div>
+          <span class="day-detail-tag ${isBroth ? 'broth' : ''}">${isBroth ? 'BOUILLON' : 'SOLIDE'}</span>
+        </div>
+        <div class="day-detail-grid">
+          <div>
+            <span class="lbl">Préparation</span>
+            <span class="val">${fmtDateTime(batch.prepDateTime)}</span>
+          </div>
+          <div>
+            <span class="lbl">Expiration</span>
+            <span class="val ${status.code === 'expired' ? 'alert-red' : daysLeft <= 7 ? 'alert' : ''}">${fmtDate(batch.expiryDate)}</span>
+          </div>
+          <div>
+            <span class="lbl">Renouvellement</span>
+            <span class="val">${fmtDate(batch.renewalAlertDate)}</span>
+          </div>
+          <div>
+            <span class="lbl">Jours restants</span>
+            <span class="val">${daysLeft < 0 ? 'Expiré' : daysLeft + ' j'}</span>
+          </div>
+        </div>
+        <div class="day-detail-status">
+          <span class="status-dot ${status.code === 'urgent' ? 'danger' : status.code === 'soon' ? 'warn' : status.code === 'expired' ? 'grey' : ''}"></span>
+          <span>${escapeHtml(status.label)}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  modal.classList.remove('hidden');
+}
+
+function closeStatDetails() {
+  const modal = document.getElementById('stat-details-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
 function renderBatchCard(batch) {
   const medium = getBatchMedium(batch);
   if (!medium) return '';
@@ -989,6 +1065,18 @@ function init() {
   // Theme toggle
   const themeBtn = document.getElementById('btn-theme');
   if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
+
+  // Stat tiles → category details popup
+  document.querySelectorAll('.stat-tile[data-stat]').forEach(tile => {
+    tile.addEventListener('click', () => openStatDetails(tile.dataset.stat));
+    tile.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openStatDetails(tile.dataset.stat); }
+    });
+  });
+  const statClose = document.getElementById('stat-details-close');
+  if (statClose) statClose.addEventListener('click', closeStatDetails);
+  const statModal = document.getElementById('stat-details-modal');
+  if (statModal) statModal.addEventListener('click', (e) => { if (e.target === statModal) closeStatDetails(); });
 
   // Register form
   document.getElementById('batch-form').addEventListener('submit', saveBatch);

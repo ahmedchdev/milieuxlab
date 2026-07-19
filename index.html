@@ -247,7 +247,7 @@
         <div id="alerts-banner"></div>
 
         <div class="stats-grid">
-          <div class="stat-tile stat-ok">
+          <div class="stat-tile stat-ok" data-stat="active" role="button" tabindex="0" aria-label="Voir les lots actifs">
             <div class="stat-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="20 6 9 17 4 12"></polyline>
@@ -256,7 +256,7 @@
             <span class="stat-num" id="stat-active">0</span>
             <span class="stat-lbl">Lots actifs</span>
           </div>
-          <div class="stat-tile stat-watch">
+          <div class="stat-tile stat-watch" data-stat="watch" role="button" tabindex="0" aria-label="Voir les lots à surveiller">
             <div class="stat-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"></circle>
@@ -266,7 +266,7 @@
             <span class="stat-num" id="stat-watch">0</span>
             <span class="stat-lbl">À surveiller</span>
           </div>
-          <div class="stat-tile stat-urgent">
+          <div class="stat-tile stat-urgent" data-stat="urgent" role="button" tabindex="0" aria-label="Voir les lots urgents">
             <div class="stat-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
@@ -277,7 +277,7 @@
             <span class="stat-num" id="stat-urgent">0</span>
             <span class="stat-lbl">Urgents</span>
           </div>
-          <div class="stat-tile stat-expired">
+          <div class="stat-tile stat-expired" data-stat="expired" role="button" tabindex="0" aria-label="Voir les lots expirés">
             <div class="stat-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"></circle>
@@ -618,6 +618,21 @@
       <h3 class="day-details-title" id="day-details-title">—</h3>
       <p class="day-details-sub" id="day-details-sub">—</p>
       <div class="day-details-list" id="day-details-list"></div>
+    </div>
+  </div>
+
+  <!-- Stat category details modal (opened from the 4 dashboard tiles) -->
+  <div id="stat-details-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="stat-details-title">
+    <div class="modal-card day-details-card">
+      <button class="ios-modal-close" id="stat-details-close" type="button" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <h3 class="day-details-title" id="stat-details-title">—</h3>
+      <p class="day-details-sub" id="stat-details-sub">—</p>
+      <div class="day-details-list" id="stat-details-list"></div>
     </div>
   </div>
 

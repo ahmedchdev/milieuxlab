@@ -533,6 +533,12 @@ body::before {
   gap: var(--space-2);
   overflow: hidden;
   transition: all var(--motion-base) var(--ease-standard);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.stat-tile:active {
+  transform: scale(0.96);
 }
 .stat-tile::before {
   content: '';
