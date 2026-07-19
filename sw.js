@@ -6,7 +6,7 @@
      3. Notification click → open the app
    ============================================================ */
 
-const CACHE_NAME = 'milieuxlab-v12';
+const CACHE_NAME = 'milieuxlab-v13';
 const ASSETS = [
   './',
   './index.html',
@@ -36,10 +36,13 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-/* --- Message: client asks us to take over immediately --- */
+/* --- Messages from the page --- */
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  }
+  if (event.data && event.data.type === 'GET_VERSION' && event.source) {
+    event.source.postMessage({ type: 'VERSION', version: CACHE_NAME });
   }
 });
 

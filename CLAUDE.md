@@ -196,12 +196,14 @@ npm run dev   # starts a static server on http://localhost:3000
 - Listens for `message` → `SKIP_WAITING` for instant takeover
 - Listens for `notificationclick` → opens/focuses app
 
-**SW update toast (the "Nouvelle version" prompt):**
-- On app launch, `reg.update()` is called to force a check
-- When new SW is `installed`, toast appears at bottom: "Nouvelle version disponible — appuyez pour actualiser."
-- Toast stays visible until user taps (no auto-activate)
-- Tap → `SKIP_WAITING` → `controllerchange` fires → page reloads 300ms later
-- Only reloads if the user explicitly tapped (not on auto-controllerchange)
+**SW AUTO-UPDATE (since v13 — replaced the tap-to-update toast):**
+- On app launch, `reg.update()` forces a SW check (`updateViaCache: 'none'`)
+- `sw.js` calls `self.skipWaiting()` on install + `clients.claim()` on activate → a new SW takes control immediately
+- App-side `controllerchange` listener reloads the page ONCE automatically (150ms) — **no user tap needed**
+- Guard: skipped on the very first SW install (`_hadControllerAtLoad === false` — page fresh from network) and double-reload protected
+- After the reload, toast "Application mise à jour ✓" (flag in `sessionStorage['milieuxlab.updated']`)
+- **Version display:** Réglages footer shows the running version (`#app-version`). Page sends `{type:'GET_VERSION'}` to the controller; SW replies `{type:'VERSION', version: CACHE_NAME}`; label shows e.g. "v13". Requested in `renderSettings()` + after SW registration.
+- Legacy `SKIP_WAITING` message still honored (pre-v13 clients in transition)
 
 **Theme toggle (dark/light):**
 - Inline `<head>` script reads `localStorage['milieuxlab.theme.v1']` and sets `data-theme` before paint
@@ -390,3 +392,12 @@ None.
 - The auto-prefill behavior itself is unchanged; only the helper text is gone
 - The `.field-hint` under "Référence code interne" (Milieux form) is kept — user scoped the removal to the register screen only
 - SW cache v11 → v12
+
+### 2026-07-19 — Session 18 — Automatic updates + version in Réglages
+- **Problem:** updates required tapping the "Nouvelle version" toast; users missed it and kept seeing stale versions ("Nothing changed")
+- **Change:** `controllerchange` now ALWAYS reloads once (was: only if user tapped). Toast prompt (`promptRefreshToUpdate`) removed entirely
+- First-install guard (`_hadControllerAtLoad`), double-reload guard, post-update confirmation toast "Application mise à jour ✓"
+- Réglages footer now shows the live SW version via GET_VERSION/VERSION messaging (single source of truth: CACHE_NAME)
+- **Transition note:** devices running ≤ v12 still use the OLD tap-to-update flow for THIS update (v13). One last tap (or two full app restarts) needed; automatic from v13 onward
+- SW cache v12 → v13
+- Verified: 14/14 harness tests (SW handlers, version reply, auto-reload once, flag/toast, legacy SKIP_WAITING)

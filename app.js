@@ -619,6 +619,7 @@ function renderSettings() {
   document.getElementById('s-expired').checked = state.settings.showExpired;
   const labInput = document.getElementById('s-labname');
   if (labInput) labInput.value = state.settings.labName || '';
+  requestAppVersion();
 }
 
 /* ============================================================
@@ -1056,6 +1057,7 @@ function init() {
   applyTheme(getSavedTheme() || 'dark');
 
   loadState();
+  showUpdateToastIfJustUpdated();
 
   // Navigation
   document.querySelectorAll('[data-go]').forEach(btn => {
@@ -1417,23 +1419,17 @@ async function registerServiceWorker() {
     // Explicitly ask the browser to look for a new SW right now
     try { await reg.update(); } catch (e) { /* offline — fine */ }
 
-    // If a new SW is already waiting, show the refresh toast immediately
+    // AUTO-UPDATE: sw.js calls skipWaiting() on install and clients.claim()
+    // on activate, so a freshly installed SW takes control immediately. The
+    // controllerchange listener below then reloads the page once so the new
+    // version runs — no user tap required.
+    // If an older SW is stuck in "waiting" (client updated from pre-v13),
+    // unstick it now.
     if (reg.waiting) {
-      promptRefreshToUpdate(reg.waiting);
+      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
     }
-    // Otherwise, watch for a new SW to install
-    reg.addEventListener('updatefound', () => {
-      const newSw = reg.installing;
-      if (!newSw) return;
-      newSw.addEventListener('statechange', () => {
-        // Show the toast as soon as the new SW is installed, even on the
-        // very first load (no existing controller). The user just needs
-        // to refresh to use the new SW.
-        if (newSw.state === 'installed') {
-          promptRefreshToUpdate(newSw);
-        }
-      });
-    });
+    // Ask the running SW its version (displayed in Réglages)
+    requestAppVersion();
 
     // Fetch the VAPID public key from the server (avoids bundling a key in the client)
     let vapidKey = '';
@@ -1451,43 +1447,43 @@ async function registerServiceWorker() {
   }
 }
 
-function promptRefreshToUpdate(sw) {
-  // Show a long-lived toast. When the user taps it, we tell the SW to
-  // skipWaiting; the controllerchange listener then reloads the page.
-  let activated = false;
-  const activate = () => {
-    if (activated) return;
-    activated = true;
-    if (sw) {
-      _userRequestedSWUpdate = true;  // tell controllerchange: yes, reload
-      sw.postMessage({ type: 'SKIP_WAITING' });
-    }
-  };
-
-  const t = document.getElementById('toast');
-  if (t) {
-    t.textContent = 'Nouvelle version disponible — appuyez pour actualiser.';
-    t.className = 'toast show';
-    t.style.cursor = 'pointer';
-    t.style.pointerEvents = 'auto';
-    t.onclick = () => activate();
-    if (toastTimer) clearTimeout(toastTimer);
-  }
-  // No auto-activate — let the user decide when to update
+// Ask the controlling SW for its version (it replies with a VERSION message,
+// handled below, which fills the #app-version label in Réglages).
+function requestAppVersion() {
+  try {
+    if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+    navigator.serviceWorker.controller.postMessage({ type: 'GET_VERSION' });
+  } catch (e) {}
 }
 
-// When the new SW takes over (because the user clicked the toast and we
-// sent SKIP_WAITING), the page is no longer controlled by the old one.
-// We reload to pick up the new controller. But this ONLY happens when the
-// user explicitly asked to update — not automatically.
+// Shown once right after an automatic update reload.
+function showUpdateToastIfJustUpdated() {
+  try {
+    if (sessionStorage.getItem('milieuxlab.updated') === '1') {
+      sessionStorage.removeItem('milieuxlab.updated');
+      setTimeout(() => toast('Application mise à jour ✓', 'success'), 600);
+    }
+  } catch (e) {}
+}
+
+// AUTO-UPDATE: when a new SW takes control (skipWaiting + clients.claim),
+// reload once so the page runs the fresh assets. Skipped on the very first
+// install — the page just came from the network, nothing is stale.
 let _reloadingOnSWChange = false;
-let _userRequestedSWUpdate = false;  // set when the user taps the toast
+const _hadControllerAtLoad = !!(typeof navigator !== 'undefined' && navigator.serviceWorker && navigator.serviceWorker.controller);
 navigator.serviceWorker && navigator.serviceWorker.addEventListener('controllerchange', () => {
   if (_reloadingOnSWChange) return;
-  // Only auto-reload if the user clicked the toast (i.e. we sent SKIP_WAITING).
-  if (_userRequestedSWUpdate) {
-    _reloadingOnSWChange = true;
-    setTimeout(() => window.location.reload(), 300);
+  _reloadingOnSWChange = true;
+  if (!_hadControllerAtLoad) return;
+  try { sessionStorage.setItem('milieuxlab.updated', '1'); } catch (e) {}
+  setTimeout(() => window.location.reload(), 150);
+});
+
+// SW → page messages (currently: version replies for the Réglages label)
+navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'VERSION') {
+    const el = document.getElementById('app-version');
+    if (el) el.textContent = String(e.data.version).replace('milieuxlab-', '');
   }
 });
 
