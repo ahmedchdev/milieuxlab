@@ -377,3 +377,10 @@ None.
 - **Fix:** `#batch-form, #media-form { display:flex; flex-direction:column; gap: var(--space-4) }` — 16px between fields vs 8px label→input (2:1 proximity ratio, labels clearly belong to the input below)
 - Note: hidden inputs (`m-id`) and `.hidden` wraps are display:none so flex gap skips them
 - SW cache v9 → v10
+
+### 2026-07-19 — Session 16 — Renommage "Nouveau lot" → "Nouvelle préparation"
+- Register screen title: "Nouveau lot" → **"Nouvelle préparation"**
+- Dashboard hero quick-action button renamed to match
+- PWA manifest shortcut renamed ("Nouvelle préparation" / short "Préparation") — applies on next PWA (re)install
+- Untouched on purpose: nav label "Enregistrer", "Lots enregistrés" list title, toasts — only the "Nouveau lot" wording was requested
+- SW cache v10 → v11

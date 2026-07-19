@@ -33,9 +33,9 @@
   ],
   "shortcuts": [
     {
-      "name": "Nouveau lot",
-      "short_name": "Nouveau",
-      "description": "Enregistrer un nouveau lot de milieu",
+      "name": "Nouvelle préparation",
+      "short_name": "Préparation",
+      "description": "Enregistrer une nouvelle préparation de milieu",
       "url": "./index.html#register",
       "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
     },
