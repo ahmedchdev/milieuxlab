@@ -15,14 +15,14 @@ const THEME_KEY = 'milieuxlab.theme.v1';
 const NOTIF_POLL_MS = 5 * 60 * 1000;  // re-check every 5 minutes
 
 const DEFAULT_MEDIA = [
-  { id: 'm_tsa',       name: 'TSA',                          type: 'solid', strain: 'S. aureus ATCC 6538',         fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 5, isDefault: true },
-  { id: 'm_macconkey', name: 'MacConkey Agar',               type: 'solid', strain: 'E. coli ATCC 8739',           fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 72, isDefault: true },
-  { id: 'm_sabouraud', name: 'Sabouraud',                    type: 'solid', strain: 'C. albicans ATCC 10231',      fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 5, isDefault: true },
-  { id: 'm_mh',        name: 'Mueller-Hinton',               type: 'solid', strain: 'S. aureus ATCC 25923',        fertilityDelayDays: 3, sterilityFormat: 'days',  sterilityValue: 5, isDefault: true },
-  { id: 'm_tsb',       name: 'TSB (Tryptic Soy Broth)',      type: 'broth', strain: 'S. aureus ATCC 6538',         fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 14, isDefault: true },
-  { id: 'm_bhi',       name: 'BHI (Brain Heart Infusion)',   type: 'broth', strain: 'S. aureus ATCC 6538',         fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 14, isDefault: true },
-  { id: 'm_xld',       name: 'XLD Agar',                     type: 'solid', strain: 'Salmonella typhimurium',      fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 24, isDefault: true },
-  { id: 'm_pbs',       name: 'Phosphate Buffer Solution',   type: 'broth', strain: 'E. coli ATCC 8739',           fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 24, isDefault: true },
+  { id: 'm_tsa',       name: 'TSA',                          type: 'solid', strain: 'S. aureus ATCC 6538',         fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 5, codeInterneRef: 'TSA', isDefault: true },
+  { id: 'm_macconkey', name: 'MacConkey Agar',               type: 'solid', strain: 'E. coli ATCC 8739',           fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 72, codeInterneRef: 'MAC', isDefault: true },
+  { id: 'm_sabouraud', name: 'Sabouraud',                    type: 'solid', strain: 'C. albicans ATCC 10231',      fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 5, codeInterneRef: 'SAB', isDefault: true },
+  { id: 'm_mh',        name: 'Mueller-Hinton',               type: 'solid', strain: 'S. aureus ATCC 25923',        fertilityDelayDays: 3, sterilityFormat: 'days',  sterilityValue: 5, codeInterneRef: 'MH', isDefault: true },
+  { id: 'm_tsb',       name: 'TSB (Tryptic Soy Broth)',      type: 'broth', strain: 'S. aureus ATCC 6538',         fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 14, codeInterneRef: 'TSB', isDefault: true },
+  { id: 'm_bhi',       name: 'BHI (Brain Heart Infusion)',   type: 'broth', strain: 'S. aureus ATCC 6538',         fertilityDelayDays: 5, sterilityFormat: 'days',  sterilityValue: 14, codeInterneRef: 'BHI', isDefault: true },
+  { id: 'm_xld',       name: 'XLD Agar',                     type: 'solid', strain: 'Salmonella typhimurium',      fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 24, codeInterneRef: 'XLD', isDefault: true },
+  { id: 'm_pbs',       name: 'Phosphate Buffer Solution',   type: 'broth', strain: 'E. coli ATCC 8739',           fertilityDelayDays: 2, sterilityFormat: 'range', sterilityMinHours: 18, sterilityMaxHours: 24, codeInterneRef: 'PBS', isDefault: true },
 ];
 
 const DEFAULT_SETTINGS = { browserNotifications: false, showExpired: false, labName: '' };
@@ -45,6 +45,13 @@ function loadState() {
     // Ensure all defaults are present (in case older storage)
     DEFAULT_MEDIA.forEach(dm => {
       if (!state.media.find(x => x.id === dm.id)) state.media.unshift(dm);
+    });
+    // Backfill codeInterneRef on default media saved before this field existed
+    DEFAULT_MEDIA.forEach(dm => {
+      const existing = state.media.find(x => x.id === dm.id);
+      if (existing && existing.codeInterneRef == null && dm.codeInterneRef) {
+        existing.codeInterneRef = dm.codeInterneRef;
+      }
     });
 
     const b = localStorage.getItem(STORAGE.BATCHES);
@@ -238,7 +245,7 @@ function renderDashboard() {
       ${alerts.map(a => `
         <div class="alert-item ${a.cls}">
           <span class="alert-dot"></span>
-          <span class="alert-medium"><b>${escapeHtml(a.medium)}</b>${a.batch.lotNumber ? ' · ' + escapeHtml(a.batch.lotNumber) : ''}</span>
+          <span class="alert-medium"><b>${escapeHtml(a.medium)}</b>${a.batch.codeInterne ? ' · ' + escapeHtml(a.batch.codeInterne) : ''}${a.batch.lotNumber ? ' · ' + escapeHtml(a.batch.lotNumber) : ''}</span>
           <span class="alert-msg">${a.msg}</span>
         </div>
       `).join('')}
@@ -302,7 +309,7 @@ function renderBatchCard(batch) {
           <div class="batch-name">${escapeHtml(medium.name)}</div>
           <div class="batch-meta">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3"></circle></svg>
-            <span>${escapeHtml(medium.strain)}</span>${batch.lotNumber ? '<span style="opacity:0.5">·</span><span>' + escapeHtml(batch.lotNumber) + '</span>' : ''}
+            <span>${escapeHtml(medium.strain)}</span>${batch.codeInterne ? '<span style="opacity:0.5">·</span><span>' + escapeHtml(batch.codeInterne) + '</span>' : ''}${batch.lotNumber ? '<span style="opacity:0.5">·</span><span>' + escapeHtml(batch.lotNumber) + '</span>' : ''}
           </div>
         </div>
         ${tag}
@@ -364,7 +371,18 @@ function renderRegister() {
   if (!date.value) date.value = new Date().toISOString().slice(0, 10);
   if (!time.value) time.value = new Date().toTimeString().slice(0, 5);
 
+  autofillCodeInterne();
   updatePreview();
+}
+
+// Prefill the "Code interne" field with the selected medium's reference.
+// The user can then complete it (e.g. append numbers).
+function autofillCodeInterne() {
+  const codeField = document.getElementById('f-code');
+  if (!codeField) return;
+  const mId = document.getElementById('f-medium').value;
+  const medium = state.media.find(m => m.id === mId);
+  codeField.value = (medium && medium.codeInterneRef) ? medium.codeInterneRef : '';
 }
 
 function updatePreview() {
@@ -444,6 +462,7 @@ function showMediaForm(medium) {
     title.textContent = 'Modifier le milieu';
     document.getElementById('m-id').value = medium.id;
     document.getElementById('m-name').value = medium.name;
+    document.getElementById('m-code-ref').value = medium.codeInterneRef || '';
     document.getElementById('m-type').value = medium.type;
     document.getElementById('m-strain').value = medium.strain;
     document.getElementById('m-fert').value = medium.fertilityDelayDays;
@@ -515,6 +534,7 @@ function saveBatch(e) {
   e.preventDefault();
   const mId = document.getElementById('f-medium').value;
   const lot = document.getElementById('f-lot').value.trim();
+  const code = document.getElementById('f-code').value.trim();
   const date = document.getElementById('f-date').value;
   const time = document.getElementById('f-time').value;
   const medium = state.media.find(m => m.id === mId);
@@ -527,6 +547,7 @@ function saveBatch(e) {
     id: 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
     mediumId: medium.id,
     lotNumber: lot || null,
+    codeInterne: code || null,
     prepDateTime: prep.toISOString(),
     fertilityResultDate: fertilityResult.toISOString(),
     sterilityResultDate: sterilityResult.toISOString(),
@@ -547,6 +568,7 @@ function editBatch(id) {
   go('register');
   document.getElementById('f-medium').value = b.mediumId;
   document.getElementById('f-lot').value = b.lotNumber || '';
+  document.getElementById('f-code').value = b.codeInterne || '';
   const d = new Date(b.prepDateTime);
   document.getElementById('f-date').value = d.toISOString().slice(0, 10);
   document.getElementById('f-time').value = fmtTime(d);
@@ -568,11 +590,12 @@ function saveMedia(e) {
   const name = document.getElementById('m-name').value.trim();
   const type = document.getElementById('m-type').value;
   const strain = document.getElementById('m-strain').value.trim();
+  const codeRef = document.getElementById('m-code-ref').value.replace(/[^A-Za-z]/g, '').toUpperCase();
   const fert = parseInt(document.getElementById('m-fert').value, 10);
   const fmt = document.querySelector('input[name="m-fmt"]:checked').value;
   if (!name || !strain || isNaN(fert) || fert < 0) return toast('Veuillez remplir tous les champs.', 'error');
 
-  const data = { name, type, strain, fertilityDelayDays: fert, sterilityFormat: fmt, isDefault: false };
+  const data = { name, type, strain, codeInterneRef: codeRef || null, fertilityDelayDays: fert, sterilityFormat: fmt, isDefault: false };
   if (fmt === 'range') {
     const min = parseInt(document.getElementById('m-min').value, 10);
     const max = parseInt(document.getElementById('m-max').value, 10);
@@ -864,10 +887,10 @@ function buildPdfDoc() {
   // (e.g. "BHI Chocolat Agar" without truncation); the other columns get
   // a comfortable minimum. Sums to 758.
   const tableY = 230;
-  const widths = [180, 110, 95, 95, 100, 80, 98];  // sums to 758
+  const widths = [168, 92, 92, 84, 84, 96, 56, 86];  // 8 cols, sums to 758
   const t = pdf.table({ x: M, y: tableY, widths, rowHeight: 18, headerHeight: 24, headerRepeat: true });
   t.header(
-    ['Milieu', 'N° de lot', 'Préparation', 'Péremption', 'Renouvellement', 'Jours', 'Statut'],
+    ['Milieu', 'N° de lot', 'Code interne', 'Préparation', 'Péremption', 'Renouvellement', 'Jours', 'Statut'],
     { bg: '#E2E8F0', textColor: '#0A0E14', bold: true, size: 8 }
   );
 
@@ -885,17 +908,18 @@ function buildPdfDoc() {
       const baseBg = ps.bucket === 'expired' ? '#FEE2E2'
                    : ps.bucket === 'urgent'  ? '#FEF3C7'
                    : (i % 2 === 0 ? '#FFFFFF' : '#F8FAFC');
-      // Soft red for the Renouvellement column (index 4), regardless of row status
-      const rowBgs = [baseBg, baseBg, baseBg, baseBg, '#FCE4E4', baseBg, baseBg];
+      // Soft red for the Renouvellement column (index 5), regardless of row status
+      const rowBgs = [baseBg, baseBg, baseBg, baseBg, baseBg, '#FCE4E4', baseBg, baseBg];
       const renewalFg = '#7F1D1D';
       const fg = ps.bucket === 'expired' ? '#7F1D1D'
               : ps.bucket === 'urgent'  ? '#78350F'
               : '#0A0E14';
       // Per-cell text color: keep the renewal date in red even if the row is normal
-      const cellFgs = [fg, fg, fg, fg, renewalFg, fg, fg];
+      const cellFgs = [fg, fg, fg, fg, fg, renewalFg, fg, fg];
       t.row([
         r.medium.name,
         r.batch.lotNumber || '—',
+        r.batch.codeInterne || '—',
         fmtDate(r.batch.prepDateTime),
         fmtDate(r.batch.expiryDate),
         fmtDate(r.batch.renewalAlertDate),
@@ -938,8 +962,22 @@ function init() {
     document.getElementById(id).addEventListener('change', updatePreview);
     document.getElementById(id).addEventListener('input', updatePreview);
   });
+  // When the medium changes, prefill the internal code with its reference
+  document.getElementById('f-medium').addEventListener('change', autofillCodeInterne);
+  // Keep the internal code uppercase as the user types
+  document.getElementById('f-code').addEventListener('input', (e) => {
+    const pos = e.target.selectionStart;
+    e.target.value = e.target.value.toUpperCase();
+    e.target.setSelectionRange(pos, pos);
+  });
 
   // Media form
+  // Reference code interne: letters only, auto-uppercased
+  document.getElementById('m-code-ref').addEventListener('input', (e) => {
+    const pos = e.target.selectionStart;
+    e.target.value = e.target.value.replace(/[^A-Za-z]/g, '').toUpperCase();
+    e.target.setSelectionRange(pos, pos);
+  });
   document.getElementById('btn-add-media').addEventListener('click', () => showMediaForm(null));
   document.getElementById('media-form-close').addEventListener('click', () => document.getElementById('media-form-wrap').classList.add('hidden'));
   document.querySelectorAll('input[name="m-fmt"]').forEach(r => r.addEventListener('change', updateMediaFormFields));
@@ -1580,7 +1618,7 @@ function openDayDetails(date) {
         <div class="day-detail-head">
           <div>
             <div class="day-detail-name">${escapeHtml(medium.name)}</div>
-            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
           </div>
           <span class="day-detail-tag ${isBroth ? 'broth' : ''}">${isBroth ? 'BOUILLON' : 'SOLIDE'}</span>
         </div>
@@ -1620,7 +1658,7 @@ function openDayDetails(date) {
         <div class="day-detail-head">
           <div>
             <div class="day-detail-name">${escapeHtml(medium.name)}</div>
-            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
           </div>
           <span class="day-detail-tag ${isBroth ? 'broth' : ''}">EXPIRE</span>
         </div>
@@ -1647,7 +1685,7 @@ function openDayDetails(date) {
         <div class="day-detail-head">
           <div>
             <div class="day-detail-name">${escapeHtml(medium.name)}</div>
-            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
           </div>
           <span class="day-detail-tag ${isBroth ? 'broth' : ''}">FERTILITÉ</span>
         </div>
@@ -1674,7 +1712,7 @@ function openDayDetails(date) {
         <div class="day-detail-head">
           <div>
             <div class="day-detail-name">${escapeHtml(medium.name)}</div>
-            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
           </div>
           <span class="day-detail-tag ${isBroth ? 'broth' : ''}">STÉRILITÉ</span>
         </div>

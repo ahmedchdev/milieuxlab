@@ -6,7 +6,7 @@
      3. Notification click → open the app
    ============================================================ */
 
-const CACHE_NAME = 'milieuxlab-v4';
+const CACHE_NAME = 'milieuxlab-v5';
 const ASSETS = [
   './',
   './index.html',

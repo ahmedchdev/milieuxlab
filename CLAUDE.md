@@ -49,8 +49,8 @@
 
 ### App Structure — 4 Views
 1. **Dashboard** — alert banner, 4 stat tiles, batch cards with progress bar + color-coded left stripe
-2. **Register** — new batch form with live-calculated dates preview
-3. **Media** — list/add/edit/delete media (defaults protected from delete)
+2. **Register** — new batch form with live-calculated dates preview; **Code interne** field (auto-prefilled from the selected medium's reference, user completes it)
+3. **Media** — list/add/edit/delete media (defaults protected from delete); each medium has a **Référence code interne** (letters only)
 4. **Settings** — lab name, notifications toggle, show-expired toggle, reset, active rules summary
 
 ### Design System
@@ -96,8 +96,8 @@
 Channels: visual banner on dashboard, OS push notifications (when PWA installed + VAPID configured).
 
 ### Data Model (in localStorage)
-- **Media** { id, name, type, shelfLifeDays, strain, fertilityDelayDays, sterilityFormat, sterilityValue, sterilityMinHours, sterilityMaxHours, isDefault }
-- **Batch** { id, mediumId, lotNumber, prepDate, prepTime, fertilityResultDate, sterilityResultDate, expiryDate, renewalAlertDate }
+- **Media** { id, name, type, shelfLifeDays, strain, fertilityDelayDays, sterilityFormat, sterilityValue, sterilityMinHours, sterilityMaxHours, **codeInterneRef** (letters-only reference, optional), isDefault }
+- **Batch** { id, mediumId, lotNumber, **codeInterne** (optional, prefilled from medium's codeInterneRef), prepDate, prepTime, fertilityResultDate, sterilityResultDate, expiryDate, renewalAlertDate }
 - **Settings** { browserNotifications, showExpired, labName }
 
 ### Media Management Rules
@@ -325,3 +325,14 @@ None.
 - Calendar legend cleaned up: removed "Bientôt", only Renouvellement + Expiré remain
 - Expiry day color only shows after the day has passed (not on day-of)
 - PDF header divider line moved from y=90 to y=100 (below the "Généré le …" text with breathing room)
+
+### 2026-07-19 — Session 10 — Code interne / Référence code interne
+- **Media form:** added "Référence code interne" field (`m-code-ref`), letters-only, auto-uppercased on input; shown for both "Ajouter un milieu" and "Modifier"
+- **Register form:** added "Code interne" field (`f-code`) below "Numéro de lot"; auto-prefilled with the selected medium's `codeInterneRef` on medium change and on initial render; user completes it (e.g. appends numbers)
+- **Data model:** `codeInterneRef` on media, `codeInterne` on batch (both optional, backward compatible)
+- The 8 default media seeded with references: TSA, MAC, SAB, MH, TSB, BHI, XLD, PBS
+- `loadState()` backfills `codeInterneRef` on legacy default media saved before this field existed
+- `codeInterne` now shown on dashboard batch cards, day-detail modal, alert banner, and PDF export (new "Code interne" column; table rebalanced to 8 cols summing to 758pt, renewal soft-red now index 5)
+- SW cache bumped v4 → v5 to force client update
+- Verified: `node --check` on app.js/sw.js/pdf.js; 9/9 DOM-level functional tests (autofill, saveBatch, editBatch restore, saveMedia letters-only sanitize, loadState backfill); HTML↔JS id wiring confirmed
+- Shipped straight to `main` (Vercel auto-deploy to production)
