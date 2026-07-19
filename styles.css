@@ -725,6 +725,34 @@ body::before {
 .batch-dates .val.alert { color: var(--warn); }
 .batch-dates .val.alert-red { color: var(--danger); }
 
+/* Traceability block on batch cards (DDP, № ALB pH, etc.) — 3 + 2 layout */
+.batch-trace {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3) var(--space-4);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--border-soft);
+}
+.batch-trace .lbl {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.batch-trace .val {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: var(--text-sm);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
+
 .renewal-row {
   display: flex;
   align-items: center;

@@ -433,6 +433,13 @@ None.
 - Added 4 optional text fields below "Heure de préparation" (before the Dates calculées block): Numéro d'action log book pH mètre (`f-act-phmetre`), Numéro d'action étuve 3 (`f-act-etuve3`), Numéro d'action étuve 4 (`f-act-etuve4`), Numéro de cycle de stérilisation (`f-cycle-steril`)
 - Stored on the batch (actionPhmetre / actionEtuve3 / actionEtuve4 / cycleSterilisation), prefilled on edit. Same field style. Rest unchanged.
 - SW cache v15 → v16
+- Abbreviations used on the dashboard card (session 24): DDP, № ALB pH, № ALB E3, № ALB E4, № CYCLE STÉRIL
+
+### 2026-07-19 — Session 24 — Bloc traçabilité sur les cartes + FIX bug de duplication
+- **Dashboard batch card:** new `.batch-trace` block placed right under the medium designation (name + strains), before the dates. Shows 5 abbreviated fields in a 3+2 grid (same lbl/val style): DDP (supplierExpiryDate, formatted), № ALB pH (actionPhmetre), № ALB E3, № ALB E4, № CYCLE STÉRIL (cycleSterilisation). Empty cells show "—"; the whole block is omitted when none of the 5 is filled. Rest of the card unchanged.
+- **FIXED duplication bug:** `saveBatch` always pushed a NEW batch, so editing from the dashboard created a copy. Added `_editingBatchId` (set by `editBatch`, cleared by `renderRegister` on fresh navigation and after save). On save: if `_editingBatchId` is set, Object.assign onto the existing batch (id + createdAt preserved) → "Lot mis à jour"; else create new → "Lot enregistré".
+- SW cache v17 → v18
+- Verified: 13/13 tests (edit updates in place / no duplicate / id+createdAt preserved / fresh nav then save creates new; trace block present with data, abbreviations + values, omitted when empty).
 
 ### 2026-07-19 — Session 23 — Retrait des mentions "(optionnel)"
 - Removed all "(optionnel)" hints from field labels (12 plain spans deleted); compound hints kept the meaningful part: "(optionnel, lettres)" → "(lettres)", "(PDF, optionnel)" → "(PDF)". "(jours)" untouched.

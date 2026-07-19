@@ -440,6 +440,16 @@ function renderBatchCard(batch) {
   const isBroth = medium.type === 'broth';
   const tag = `<span class="tag ${isBroth ? 'broth' : ''}">${isBroth ? 'BOUILLON' : 'SOLIDE'}</span>`;
 
+  // Traceability block (below the medium designation, before the dates)
+  const trace = [
+    ['DDP', batch.supplierExpiryDate ? fmtDate(batch.supplierExpiryDate) : null],
+    ['№ ALB pH', batch.actionPhmetre],
+    ['№ ALB E3', batch.actionEtuve3],
+    ['№ ALB E4', batch.actionEtuve4],
+    ['№ CYCLE STÉRIL', batch.cycleSterilisation],
+  ];
+  const hasTrace = trace.some(([, v]) => v && String(v).trim());
+
   return `
     <div class="batch-card ${s.cls}">
       <div class="batch-head">
@@ -452,6 +462,14 @@ function renderBatchCard(batch) {
         </div>
         ${tag}
       </div>
+      ${hasTrace ? `
+      <div class="batch-trace">
+        ${trace.map(([lbl, v]) => `
+        <div>
+          <span class="lbl">${lbl}</span>
+          <span class="val">${v ? escapeHtml(String(v)) : '—'}</span>
+        </div>`).join('')}
+      </div>` : ''}
 
       <div class="batch-dates">
         <div>
@@ -498,6 +516,7 @@ function renderBatchCard(batch) {
    ============================================================ */
 
 function renderRegister() {
+  _editingBatchId = null;   // fresh navigation to the form = new lot (editBatch re-sets it)
   const sel = document.getElementById('f-medium');
   sel.innerHTML = state.media.map(m =>
     `<option value="${m.id}">${escapeHtml(m.name)} (${m.type === 'solid' ? 'Solide' : 'Bouillon'})</option>`
@@ -708,6 +727,8 @@ function go(view) {
    ACTIONS
    ============================================================ */
 
+let _editingBatchId = null;   // set by editBatch; null = creating a new lot
+
 function saveBatch(e) {
   e.preventDefault();
   const mId = document.getElementById('f-medium').value;
@@ -726,8 +747,7 @@ function saveBatch(e) {
 
   const prep = new Date(`${date}T${time}`);
   const { fertilityResult, sterilityResult, expiry, renewalAlert } = computeBatchDates(medium, prep);
-  const batch = {
-    id: 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+  const fields = {
     mediumId: medium.id,
     lotNumber: lot || null,
     codeInterne: code || null,
@@ -741,11 +761,24 @@ function saveBatch(e) {
     sterilityResultDate: sterilityResult.toISOString(),
     expiryDate: expiry.toISOString(),
     renewalAlertDate: renewalAlert.toISOString(),
-    createdAt: new Date().toISOString(),
   };
-  state.batches.push(batch);
-  persist();
-  toast('Lot enregistré avec succès.', 'success');
+
+  if (_editingBatchId) {
+    // UPDATE the existing lot in place — no duplicate is created
+    const existing = state.batches.find(x => x.id === _editingBatchId);
+    if (existing) Object.assign(existing, fields);
+    _editingBatchId = null;
+    persist();
+    toast('Lot mis à jour avec succès.', 'success');
+  } else {
+    state.batches.push({
+      id: 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      ...fields,
+      createdAt: new Date().toISOString(),
+    });
+    persist();
+    toast('Lot enregistré avec succès.', 'success');
+  }
   document.getElementById('batch-form').reset();
   go('dashboard');
 }
@@ -753,7 +786,7 @@ function saveBatch(e) {
 function editBatch(id) {
   const b = state.batches.find(x => x.id === id);
   if (!b) return;
-  go('register');
+  go('register');   // renderRegister resets _editingBatchId; we set it below
   document.getElementById('f-medium').value = b.mediumId;
   document.getElementById('f-lot').value = b.lotNumber || '';
   document.getElementById('f-code').value = b.codeInterne || '';
@@ -765,6 +798,7 @@ function editBatch(id) {
   const d = new Date(b.prepDateTime);
   document.getElementById('f-date').value = d.toISOString().slice(0, 10);
   document.getElementById('f-time').value = fmtTime(d);
+  _editingBatchId = id;   // subsequent save updates THIS lot instead of creating a copy
   updatePreview();
 }
 
