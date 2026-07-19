@@ -344,3 +344,4 @@ None.
 - **Fix:** green dot now appears ONLY on days a lot was registered — added `batchesRegisteredOnDate(date)` (matches `batch.prepDateTime`); red (renewal) and yellow (expired) dots are now conditional on actual activity
 - Day-details modal now lists registrations first ("ENREGISTRÉ") and includes them in the clickable-day count and subtitle
 - Verified: `node --check` + 7/7 calendar DOM tests (green only on registration day, none when no batches, none on fertility/sterility-only days)
+- **Follow-up:** first push forgot the SW cache bump → clients stuck on cached app.js (cache-first) kept seeing green dots. Bumped v5 → v6 in a follow-up commit. **RULE: bump CACHE_NAME on EVERY push that changes app files.**
