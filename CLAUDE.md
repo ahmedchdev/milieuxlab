@@ -207,11 +207,13 @@ npm run dev   # starts a static server on http://localhost:3000
 **Calendar (header button):**
 - Replaces the old count pill in the header
 - Opens a month view with prev/next navigation
-- Days colorized:
-  - **Red** = renewal needed (urgent OR soon, today or past)
+- Day dots (per day):
+  - **Green (Conforme)** = a lot was **registered (prepared) on that day** — driven by `batchesRegisteredOnDate()` (matches batch.prepDateTime). Only shown on actual registration days.
+  - **Red** = renewal needed (urgent OR soon) on that day
   - **Yellow** = expired (only AFTER the day has passed)
+  - Grey = fertility / sterility result day
   - Today has a blue border
-- Click a day with activity → day-details modal opens with full batch info
+- Click a day with activity → day-details modal (registrations shown first as "ENREGISTRÉ", then renewal/expiry/fertility/sterility)
 - 6 legend items collapsed to 3: Conforme (green), Renouvellement (red), Expiré (yellow)
 - Calendar badge on the button shows urgent count (pulsing red)
 
@@ -336,3 +338,9 @@ None.
 - SW cache bumped v4 → v5 to force client update
 - Verified: `node --check` on app.js/sw.js/pdf.js; 9/9 DOM-level functional tests (autofill, saveBatch, editBatch restore, saveMedia letters-only sanitize, loadState backfill); HTML↔JS id wiring confirmed
 - Shipped straight to `main` (Vercel auto-deploy to production)
+
+### 2026-07-19 — Session 11 — Calendar green-dot fix
+- **Bug:** the green "Conforme" dot was appended to every day (default `worst='ok'`), so it showed on all days
+- **Fix:** green dot now appears ONLY on days a lot was registered — added `batchesRegisteredOnDate(date)` (matches `batch.prepDateTime`); red (renewal) and yellow (expired) dots are now conditional on actual activity
+- Day-details modal now lists registrations first ("ENREGISTRÉ") and includes them in the clickable-day count and subtitle
+- Verified: `node --check` + 7/7 calendar DOM tests (green only on registration day, none when no batches, none on fertility/sterility-only days)

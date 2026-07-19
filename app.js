@@ -1462,6 +1462,14 @@ function batchesSterileOnDate(date) {
     .filter(({ medium, batch }) => medium && startOfDay(new Date(batch.sterilityResultDate)).getTime() === target);
 }
 
+function batchesRegisteredOnDate(date) {
+  // Returns batches that were REGISTERED (prepared) on `date`
+  const target = startOfDay(date).getTime();
+  return state.batches
+    .map(b => ({ batch: b, medium: getBatchMedium(b) }))
+    .filter(({ medium, batch }) => medium && startOfDay(new Date(batch.prepDateTime)).getTime() === target);
+}
+
 function worstStatusForDate(date) {
   // Determines the most critical status affecting a date
   const today = startOfDay(new Date()).getTime();
@@ -1527,26 +1535,38 @@ function renderCalendar() {
     if (status === 'expired') el.classList.add('cal-expired');
     else if (status === 'urgent') el.classList.add('cal-urgent');
 
-    // Dots: renewal (urgent = red, soon = blue, ok = green), expiry (orange), fertility/sterility (small grey)
+    // Dots: green = a lot was registered that day; red = renewal urgent/soon;
+    // yellow = expired (past); grey = fertility/sterility result days.
     const dots = document.createElement('div');
     dots.className = 'cal-dots';
+    const registered = batchesRegisteredOnDate(date);
     const renewing = batchesOnDate(date);
     const expiring = batchesExpiringOnDate(date);
     const fertile  = batchesFertileOnDate(date);
     const sterile  = batchesSterileOnDate(date);
 
-    let worst = 'ok';
+    // Renewal / expiry severity dot — only shown when such activity exists on this day
+    let severity = null;
     for (const { batch } of renewing) {
       const s = batchStatus(batch);
-      if (s.code === 'urgent' || s.code === 'soon') { worst = 'urgent'; break; }
+      if (s.code === 'urgent' || s.code === 'soon') { severity = 'urgent'; break; }
     }
-    // Only show expired dot if the day is in the past
+    // Only show the expired dot once the day is in the past
     if (expiring.length > 0 && startOfDay(date).getTime() < today.getTime()) {
-      worst = 'expired';
+      severity = 'expired';
     }
-    const dot = document.createElement('i');
-    dot.className = 'cal-dot dot-' + worst;
-    dots.appendChild(dot);
+    if (severity) {
+      const dot = document.createElement('i');
+      dot.className = 'cal-dot dot-' + severity;
+      dots.appendChild(dot);
+    }
+
+    // Green "Conforme" dot — ONLY on days a lot was actually registered
+    if (registered.length > 0) {
+      const dot = document.createElement('i');
+      dot.className = 'cal-dot dot-ok';
+      dots.appendChild(dot);
+    }
 
     if (fertile.length > 0) {
       const fd = document.createElement('i');
@@ -1563,7 +1583,7 @@ function renderCalendar() {
     if (dots.children.length > 0) el.appendChild(dots);
 
     // Make clickable if anything is happening on this day
-    const total = renewing.length + expiring.length + fertile.length + sterile.length;
+    const total = registered.length + renewing.length + expiring.length + fertile.length + sterile.length;
     if (total > 0) {
       el.classList.add('cal-clickable');
       el.addEventListener('click', () => openDayDetails(date));
@@ -1591,6 +1611,7 @@ function openDayDetails(date) {
   const list    = document.getElementById('day-details-list');
   if (!modal || !list) return;
 
+  const registered = batchesRegisteredOnDate(date);
   const renewing = batchesOnDate(date);
   const expiring = batchesExpiringOnDate(date);
   const fertile  = batchesFertileOnDate(date);
@@ -1599,6 +1620,7 @@ function openDayDetails(date) {
   const opts = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
   titleEl.textContent = date.toLocaleDateString('fr-FR', opts);
   const parts = [];
+  if (registered.length) parts.push(`${registered.length} enregistrement${registered.length > 1 ? 's' : ''}`);
   if (renewing.length) parts.push(`${renewing.length} renouvellement${renewing.length > 1 ? 's' : ''}`);
   if (expiring.length) parts.push(`${expiring.length} expiration${expiring.length > 1 ? 's' : ''}`);
   if (fertile.length)  parts.push(`${fertile.length} résultat${fertile.length > 1 ? 's' : ''} fertilité`);
@@ -1606,6 +1628,33 @@ function openDayDetails(date) {
   subEl.textContent = parts.length ? parts.join(' · ') : 'Aucun événement';
 
   const items = [];
+
+  // Registered (prepared) on this day
+  registered.forEach(({ batch, medium }) => {
+    if (!medium) return;
+    const isBroth = medium.type === 'broth';
+    items.push(`
+      <div class="day-detail-item">
+        <div class="day-detail-head">
+          <div>
+            <div class="day-detail-name">${escapeHtml(medium.name)}</div>
+            <div class="day-detail-meta">${escapeHtml(medium.strain)}${batch.codeInterne ? ' · ' + escapeHtml(batch.codeInterne) : ''}${batch.lotNumber ? ' · ' + escapeHtml(batch.lotNumber) : ''}</div>
+          </div>
+          <span class="day-detail-tag ${isBroth ? 'broth' : ''}">ENREGISTRÉ</span>
+        </div>
+        <div class="day-detail-grid">
+          <div>
+            <span class="lbl">Préparation</span>
+            <span class="val">${fmtDateTime(batch.prepDateTime)}</span>
+          </div>
+          <div>
+            <span class="lbl">Expiration</span>
+            <span class="val">${fmtDate(batch.expiryDate)}</span>
+          </div>
+        </div>
+      </div>
+    `);
+  });
 
   // Renewal items
   renewing.forEach(({ batch, medium }) => {
