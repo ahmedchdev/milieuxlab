@@ -384,3 +384,9 @@ None.
 - PWA manifest shortcut renamed ("Nouvelle préparation" / short "Préparation") — applies on next PWA (re)install
 - Untouched on purpose: nav label "Enregistrer", "Lots enregistrés" list title, toasts — only the "Nouveau lot" wording was requested
 - SW cache v10 → v11
+
+### 2026-07-19 — Session 17 — Écran "Nouvelle préparation" : suppression du texte d'aide
+- Removed the field-hint under "Code interne" on the register screen ("Pré-rempli avec la référence du milieu — complétez avec des chiffres si besoin.")
+- The auto-prefill behavior itself is unchanged; only the helper text is gone
+- The `.field-hint` under "Référence code interne" (Milieux form) is kept — user scoped the removal to the register screen only
+- SW cache v11 → v12
