@@ -8,6 +8,7 @@ const STORAGE = {
   MEDIA:   'milieuxlab.media.v1',
   SETTINGS:'milieuxlab.settings.v1',
   ALERTS_HIDDEN: 'milieuxlab.alertsHidden.v1',
+  DELETED_DEFAULTS: 'milieuxlab.deletedDefaults.v1',
 };
 
 const BUFFER_DAYS = 2;
@@ -36,15 +37,20 @@ const state = {
   batches: [],
   media: [],
   settings: { ...DEFAULT_SETTINGS },
+  deletedDefaults: [],   // ids of default media the user deleted (not re-added on load)
   currentView: 'dashboard',
 };
 
 function loadState() {
   try {
+    const del = localStorage.getItem(STORAGE.DELETED_DEFAULTS);
+    state.deletedDefaults = del ? JSON.parse(del) : [];
+
     const m = localStorage.getItem(STORAGE.MEDIA);
     state.media = m ? JSON.parse(m) : [...DEFAULT_MEDIA];
-    // Ensure all defaults are present (in case older storage)
+    // Ensure defaults are present (for older storage), EXCEPT ones the user deleted
     DEFAULT_MEDIA.forEach(dm => {
+      if (state.deletedDefaults.includes(dm.id)) return;
       if (!state.media.find(x => x.id === dm.id)) state.media.unshift(dm);
     });
     // Backfill fields added after first release, on default media saved before they existed
@@ -66,11 +72,13 @@ function loadState() {
     state.media = [...DEFAULT_MEDIA];
     state.batches = [];
     state.settings = { ...DEFAULT_SETTINGS };
+    state.deletedDefaults = [];
   }
 }
 
 function persist() {
   localStorage.setItem(STORAGE.MEDIA, JSON.stringify(state.media));
+  localStorage.setItem(STORAGE.DELETED_DEFAULTS, JSON.stringify(state.deletedDefaults || []));
   localStorage.setItem(STORAGE.BATCHES, JSON.stringify(state.batches));
   localStorage.setItem(STORAGE.SETTINGS, JSON.stringify(state.settings));
 }
@@ -537,7 +545,7 @@ function updatePreview() {
   document.getElementById('p-ster').textContent  = fmtDateTime(sterilityResult);
   document.getElementById('p-exp').textContent   = fmtDate(expiry);
   document.getElementById('p-renew').textContent = fmtDate(renewalAlert);
-  sub.textContent = `${escapeHtml(medium.name)} · ${medium.type === 'solid' ? '30 jours' : '15 jours'}`;
+  sub.textContent = `${escapeHtml(medium.name)} · ${mediumShelfDays(medium)} jours`;
   preview.dataset.ready = '1';
 }
 
@@ -553,6 +561,7 @@ function renderMedia() {
     const shelf = mediumShelfDays(m);
     const strainsTxt = mediumStrainText(m);
     const strainCount = mediumStrains(m).length;
+    const inhib = mediumInhibStrains(m);
     // Optional extra fields, only rendered when filled
     const extras = [
       ['pH', m.ph], ['Couleur', m.couleur], ['Additif', m.additif],
@@ -562,7 +571,6 @@ function renderMedia() {
       <div class="media-card ${isBroth ? 'broth' : ''}">
         <div class="media-head">
           <div class="media-name">${escapeHtml(m.name)}</div>
-          <span class="tag ${isBroth ? 'broth' : ''}">${m.isDefault ? 'DÉFAUT' : 'PERSO'}</span>
         </div>
         <div class="media-grid">
           <div>
@@ -579,12 +587,17 @@ function renderMedia() {
           </div>
           <div>
             <span class="lbl">Stérilité</span>
-            <span class="val blue">${getSterilityDisplay(m)}</span>
+            <span class="val">${getSterilityDisplay(m)}</span>
           </div>
           <div style="grid-column: 1/-1">
-            <span class="lbl">Souche${strainCount > 1 ? 's' : ''}</span>
+            <span class="lbl">Souche${strainCount > 1 ? 's' : ''} fertilité</span>
             <span class="val">${escapeHtml(strainsTxt)}</span>
           </div>
+          ${inhib.length ? `
+          <div style="grid-column: 1/-1">
+            <span class="lbl">Souche${inhib.length > 1 ? 's' : ''} inhibition</span>
+            <span class="val">${escapeHtml(inhib.join(' / '))}</span>
+          </div>` : ''}
           ${extras.map(([lbl, v]) => `
           <div style="grid-column: 1/-1">
             <span class="lbl">${lbl}</span>
@@ -598,7 +611,7 @@ function renderMedia() {
         </div>
         <div class="media-foot">
           <button class="icon-btn" data-medit="${m.id}">Modifier</button>
-          ${m.isDefault ? '' : `<button class="icon-btn danger" data-mdel="${m.id}">Supprimer</button>`}
+          <button class="icon-btn danger" data-mdel="${m.id}">Supprimer</button>
         </div>
       </div>
     `;
@@ -617,7 +630,8 @@ function showMediaForm(medium) {
     document.getElementById('m-code-ref').value = medium.codeInterneRef || '';
     document.getElementById('m-type').value = medium.type;
     document.getElementById('m-shelf').value = String(mediumShelfDays(medium));
-    renderStrainRows(mediumStrains(medium));
+    renderStrainRows('m-strains-list', mediumStrains(medium));
+    renderStrainRows('m-inhib-list', medium.inhibitionStrains || []);
     document.getElementById('m-fert').value = medium.fertilityDelayDays;
     const fmt = medium.sterilityFormat;
     document.querySelector(`input[name="m-fmt"][value="${fmt}"]`).checked = true;
@@ -639,7 +653,8 @@ function showMediaForm(medium) {
     form.reset();
     document.getElementById('m-id').value = '';
     document.getElementById('m-shelf').value = '30';
-    renderStrainRows([]);
+    renderStrainRows('m-strains-list', []);
+    renderStrainRows('m-inhib-list', []);
     document.querySelector('input[name="m-fmt"][value="days"]').checked = true;
     coaFormReset(null);
     updateMediaFormFields();
@@ -698,6 +713,7 @@ function saveBatch(e) {
   const mId = document.getElementById('f-medium').value;
   const lot = document.getElementById('f-lot').value.trim();
   const code = document.getElementById('f-code').value.trim();
+  const supplierExp = document.getElementById('f-supplier-exp').value;
   const date = document.getElementById('f-date').value;
   const time = document.getElementById('f-time').value;
   const medium = state.media.find(m => m.id === mId);
@@ -711,6 +727,7 @@ function saveBatch(e) {
     mediumId: medium.id,
     lotNumber: lot || null,
     codeInterne: code || null,
+    supplierExpiryDate: supplierExp || null,
     prepDateTime: prep.toISOString(),
     fertilityResultDate: fertilityResult.toISOString(),
     sterilityResultDate: sterilityResult.toISOString(),
@@ -732,6 +749,7 @@ function editBatch(id) {
   document.getElementById('f-medium').value = b.mediumId;
   document.getElementById('f-lot').value = b.lotNumber || '';
   document.getElementById('f-code').value = b.codeInterne || '';
+  document.getElementById('f-supplier-exp').value = b.supplierExpiryDate || '';
   const d = new Date(b.prepDateTime);
   document.getElementById('f-date').value = d.toISOString().slice(0, 10);
   document.getElementById('f-time').value = fmtTime(d);
@@ -753,7 +771,8 @@ function saveMedia(e) {
   const name = document.getElementById('m-name').value.trim();
   const type = document.getElementById('m-type').value;
   const shelfLifeDays = parseInt(document.getElementById('m-shelf').value, 10);
-  const strains = collectStrains();
+  const strains = collectStrains('m-strains-list');
+  const inhibitionStrains = collectStrains('m-inhib-list');
   const codeRef = document.getElementById('m-code-ref').value.replace(/[^A-Za-z]/g, '').toUpperCase();
   const fert = parseInt(document.getElementById('m-fert').value, 10);
   const fmt = document.querySelector('input[name="m-fmt"]:checked').value;
@@ -763,7 +782,7 @@ function saveMedia(e) {
   if (isNaN(shelfLifeDays) || shelfLifeDays <= 0) return toast('Veuillez choisir un délai de conservation.', 'error');
 
   const data = {
-    name, type, shelfLifeDays, strains,
+    name, type, shelfLifeDays, strains, inhibitionStrains,
     codeInterneRef: codeRef || null,
     fertilityDelayDays: fert,
     sterilityFormat: fmt,
@@ -816,9 +835,11 @@ function editMedia(id) {
 
 function deleteMedia(id) {
   const m = state.media.find(x => x.id === id);
-  if (!m || m.isDefault) return;
-  confirmAction(`Supprimer "${m.name}" ?`, 'Ce milieu personnalisé sera supprimé définitivement.', () => {
+  if (!m) return;
+  confirmAction(`Supprimer "${m.name}" ?`, 'Ce milieu sera supprimé définitivement.', () => {
     state.media = state.media.filter(x => x.id !== id);
+    // Remember deleted defaults so loadState doesn't re-add them
+    if (m.isDefault && !state.deletedDefaults.includes(id)) state.deletedDefaults.push(id);
     persist();
     idbDeleteCoa(id).catch(() => {});   // clean up any stored CoA
     renderMedia();
@@ -830,23 +851,28 @@ function deleteMedia(id) {
    MEDIA FORM — souches multiples
    ============================================================ */
 
-function renderStrainRows(strains) {
-  const list = document.getElementById('m-strains-list');
+const STRAIN_PLACEHOLDER = {
+  'm-strains-list': 'Ex. H. influenzae ATCC 10211',
+  'm-inhib-list': 'Ex. E. coli ATCC 25922',
+};
+
+function renderStrainRows(listId, strains) {
+  const list = document.getElementById(listId);
   if (!list) return;
   list.innerHTML = '';
   const arr = (strains && strains.length) ? strains : [''];
-  arr.forEach(v => addStrainRow(v));
+  arr.forEach(v => addStrainRow(listId, v));
 }
 
-function addStrainRow(value) {
-  const list = document.getElementById('m-strains-list');
+function addStrainRow(listId, value) {
+  const list = document.getElementById(listId);
   if (!list) return;
   const row = document.createElement('div');
   row.className = 'strain-row';
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'field-input strain-input';
-  input.placeholder = 'Ex. H. influenzae ATCC 10211';
+  input.placeholder = STRAIN_PLACEHOLDER[listId] || '';
   input.value = value || '';
   const rm = document.createElement('button');
   rm.type = 'button';
@@ -863,10 +889,14 @@ function addStrainRow(value) {
   list.appendChild(row);
 }
 
-function collectStrains() {
-  const list = document.getElementById('m-strains-list');
+function collectStrains(listId) {
+  const list = document.getElementById(listId);
   if (!list) return [];
   return Array.from(list.querySelectorAll('.strain-input')).map(i => i.value.trim()).filter(Boolean);
+}
+
+function mediumInhibStrains(medium) {
+  return Array.isArray(medium.inhibitionStrains) ? medium.inhibitionStrains.filter(Boolean) : [];
 }
 
 /* ============================================================
@@ -1409,8 +1439,9 @@ function init() {
   document.querySelectorAll('input[name="m-fmt"]').forEach(r => r.addEventListener('change', updateMediaFormFields));
   document.getElementById('media-form').addEventListener('submit', saveMedia);
 
-  // Souches multiples
-  document.getElementById('m-strain-add').addEventListener('click', () => addStrainRow(''));
+  // Souches multiples (fertilité + inhibition)
+  document.getElementById('m-strain-add').addEventListener('click', () => addStrainRow('m-strains-list', ''));
+  document.getElementById('m-inhib-add').addEventListener('click', () => addStrainRow('m-inhib-list', ''));
 
   // CoA import + lecteur inline
   if (window.pdfjsLib) { try { pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.min.js'; } catch (e) {} }
@@ -1477,6 +1508,7 @@ function init() {
       localStorage.removeItem(STORAGE.BATCHES);
       localStorage.removeItem(STORAGE.MEDIA);
       localStorage.removeItem(STORAGE.SETTINGS);
+      localStorage.removeItem(STORAGE.DELETED_DEFAULTS);
       loadState();
       renderDashboard();
       renderMedia();

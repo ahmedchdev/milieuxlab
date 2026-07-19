@@ -343,6 +343,11 @@
             <input type="time" id="f-time" class="field-input" required />
           </div>
 
+          <div class="field">
+            <label class="field-label">Date de péremption du milieu (fournisseur) <span class="field-optional">(optionnel)</span></label>
+            <input type="date" id="f-supplier-exp" class="field-input" />
+          </div>
+
           <div class="preview" id="preview">
             <div class="preview-head">
               <span class="preview-title">Dates calculées</span>
@@ -391,7 +396,7 @@
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          <span>Ajouter un milieu personnalisé</span>
+          <span>Ajouter un milieu</span>
         </button>
 
         <div id="media-form-wrap" class="card form-card hidden">
@@ -432,6 +437,11 @@
               <label class="field-label">Souche(s) de test fertilité</label>
               <div id="m-strains-list" class="strains-list"></div>
               <button type="button" class="strains-add" id="m-strain-add">+ Ajouter une souche</button>
+            </div>
+            <div class="field">
+              <label class="field-label">Souche(s) de test d'inhibition</label>
+              <div id="m-inhib-list" class="strains-list"></div>
+              <button type="button" class="strains-add" id="m-inhib-add">+ Ajouter une souche</button>
             </div>
             <div class="field">
               <label class="field-label">Résultat test de fertilité après <span class="field-optional">(jours)</span></label>

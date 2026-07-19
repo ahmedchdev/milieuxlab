@@ -100,8 +100,9 @@ Channels: visual banner on dashboard, OS push notifications (when PWA installed 
 - Hidden only for the SAME day AND the SAME alert set — reappears next day, or immediately if any new alert arrives (safety first)
 
 ### Data Model (in localStorage)
-- **Media** { id, name, type, **shelfLifeDays** (Délai de conservation, days), **strains** (array; legacy `strain` string still read), fertilityDelayDays, sterilityFormat, sterilityValue, sterilityMinHours, sterilityMaxHours, **codeInterneRef** (letters-only, optional), **ph, couleur, additif, aspect, fournisseur** (optional text), **coa** ({name,size,importedAt} — bytes in IndexedDB `milieuxlab-files/coa` keyed by medium id), isDefault }
-- **Batch** { id, mediumId, lotNumber, **codeInterne** (optional, prefilled from medium's codeInterneRef), prepDate, prepTime, fertilityResultDate, sterilityResultDate, expiryDate, renewalAlertDate }
+- **Media** { id, name, type, **shelfLifeDays** (Délai de conservation, days), **strains** (array; legacy `strain` string still read), **inhibitionStrains** (array, souches de test d'inhibition), fertilityDelayDays, sterilityFormat, sterilityValue, sterilityMinHours, sterilityMaxHours, **codeInterneRef** (letters-only, optional), **ph, couleur, additif, aspect, fournisseur** (optional text), **coa** ({name,size,importedAt} — bytes in IndexedDB `milieuxlab-files/coa` keyed by medium id), isDefault }
+- **Default media are now deletable.** Deleted default ids are stored in `localStorage['milieuxlab.deletedDefaults.v1']` (state.deletedDefaults) so loadState does NOT re-add them. "Réinitialiser l'application" clears this list.
+- **Batch** { id, mediumId, lotNumber, **codeInterne** (optional, prefilled from medium's codeInterneRef), **supplierExpiryDate** (date de péremption fournisseur, optional), prepDateTime, fertilityResultDate, sterilityResultDate, expiryDate, renewalAlertDate }
 - **Settings** { browserNotifications, showExpired, labName }
 
 ### Media Management Rules
@@ -419,3 +420,11 @@ None.
 - SW precache adds the 2 vendor files; cache v13 → v14
 - Verified: node --check all; CSS balanced; 32/32 DOM tests (multi-strain add/remove/collect, shelf calc + fallback, new fields save/prefill, renderMedia output, CoA form-state). pdf.js render path verified structurally (API symbols present); runtime render not unit-testable in Node.
 - Note: CoA files live only on the device (IndexedDB) — not synced, not in localStorage export.
+
+### 2026-07-19 — Session 21 — Supplier expiry field + media-card uniformity + inhibition strains
+- **Register ("Nouvelle préparation"):** new optional field "Date de péremption du milieu (fournisseur)" (`f-supplier-exp`), placed after Heure de préparation. Stored as `batch.supplierExpiryDate`, prefilled on edit. (Not shown in cards/PDF — kept per "sans changement".)
+- **Media cards:** removed DÉFAUT/PERSO badges; every card now has BOTH Modifier + Supprimer (defaults deletable, persisted via deletedDefaults); removed the `.blue` accent on Stérilité so all `.val` share one weight/style. Card also shows inhibition strains row when present; strain labels disambiguated ("Souche(s) fertilité" / "Souche(s) inhibition").
+- **Media form:** new "Souche(s) de test d'inhibition" section (dynamic list `m-inhib-list` + "+ Ajouter une souche") below the fertility section; strain functions generalized to take a listId (renderStrainRows/addStrainRow/collectStrains) with per-list placeholders. Button "Ajouter un milieu personnalisé" → "Ajouter un milieu".
+- Also fixed the register preview subtitle to show the real per-medium shelf life (was hardcoded 30/15).
+- SW cache v14 → v15
+- Verified: node --check; 19/19 DOM tests (inhibition strains save/prefill, deletable defaults + no-resurrect on reload, supplier expiry save/prefill, card has no badge + both buttons + no .blue + inhibition row).
