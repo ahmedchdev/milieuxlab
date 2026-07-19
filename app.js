@@ -7,6 +7,7 @@ const STORAGE = {
   BATCHES: 'milieuxlab.batches.v1',
   MEDIA:   'milieuxlab.media.v1',
   SETTINGS:'milieuxlab.settings.v1',
+  ALERTS_HIDDEN: 'milieuxlab.alertsHidden.v1',
 };
 
 const BUFFER_DAYS = 2;
@@ -198,6 +199,31 @@ function batchProgress(batch) {
    RENDERING — DASHBOARD
    ============================================================ */
 
+// "Alertes du jour" dismissal — hidden for the rest of the day once the user
+// taps ×. Reappears automatically the next day, or immediately if the alert
+// set changes (a NEW alert must never stay hidden — safety first).
+function localDateKey(d) {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+}
+
+function isAlertsBannerDismissed(sig) {
+  try {
+    const raw = localStorage.getItem(STORAGE.ALERTS_HIDDEN);
+    if (!raw) return false;
+    const saved = JSON.parse(raw);
+    return !!saved && saved.date === localDateKey(new Date()) && saved.sig === sig;
+  } catch (e) { return false; }
+}
+
+function dismissAlertsBanner(sig) {
+  try {
+    localStorage.setItem(STORAGE.ALERTS_HIDDEN, JSON.stringify({ date: localDateKey(new Date()), sig }));
+  } catch (e) {}
+  const banner = document.getElementById('alerts-banner');
+  if (banner) { banner.innerHTML = ''; banner.className = ''; }
+}
+
 function renderDashboard() {
   const now = new Date();
   const visible = state.batches.filter(b => state.settings.showExpired || batchStatus(b).code !== 'expired');
@@ -224,7 +250,11 @@ function renderDashboard() {
     const s = batchStatus(b);
     const medium = getBatchMedium(b);
     if (!medium) return;
-    if (s.code === 'expired')  alerts.push({ cls: 'd-red',    msg: 'EXPIRE AUJOURD\'HUI', medium: medium.name, batch: b });
+    // "EXPIRE AUJOURD'HUI" only on the actual expiry day — it disappears
+    // automatically the next day (old expired lots no longer flood the banner)
+    if (s.code === 'expired') {
+      if (isSameDay(now, b.expiryDate)) alerts.push({ cls: 'd-red', msg: 'EXPIRE AUJOURD\'HUI', medium: medium.name, batch: b });
+    }
     else if (s.code === 'urgent')  alerts.push({ cls: 'd-red',    msg: 'Renouvellement requis', medium: medium.name, batch: b });
     else if (s.code === 'soon')    alerts.push({ cls: 'd-orange', msg: `Expire ${fmtRelativeDays(daysBetween(now, b.expiryDate))}`, medium: medium.name, batch: b });
     else if (s.code === 'fert-today') alerts.push({ cls: 'd-yellow', msg: 'Résultat fertilité attendu', medium: medium.name, batch: b });
@@ -232,7 +262,8 @@ function renderDashboard() {
   });
 
   const banner = document.getElementById('alerts-banner');
-  if (alerts.length === 0) {
+  const alertsSig = alerts.map(a => `${a.batch.id}:${a.msg}`).sort().join('|');
+  if (alerts.length === 0 || isAlertsBannerDismissed(alertsSig)) {
     banner.innerHTML = '';
     banner.className = '';
   } else {
@@ -241,6 +272,7 @@ function renderDashboard() {
       <div class="alerts-banner-title">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
         Alertes du jour (${alerts.length})
+        <button type="button" class="alerts-banner-close" aria-label="Masquer les alertes du jour">×</button>
       </div>
       ${alerts.map(a => `
         <div class="alert-item ${a.cls}">
@@ -250,6 +282,8 @@ function renderDashboard() {
         </div>
       `).join('')}
     `;
+    const closeBtn = banner.querySelector('.alerts-banner-close');
+    if (closeBtn) closeBtn.addEventListener('click', () => dismissAlertsBanner(alertsSig));
   }
 
   // Batches list

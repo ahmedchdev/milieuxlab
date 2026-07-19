@@ -91,9 +91,14 @@
 - 🔴 Renewal date reached → "Prepare a new batch"
 - 🟡 Fertility result due today
 - 🟡 Sterility result due today
-- 🔴 Expiry date reached → "BATCH EXPIRES TODAY"
+- 🔴 Expiry date reached → "EXPIRE AUJOURD'HUI" — **shown ONLY on the expiry day itself** in the dashboard banner (disappears automatically the next day; old expired lots never flood the banner)
 
 Channels: visual banner on dashboard, OS push notifications (when PWA installed + VAPID configured).
+
+**"Alertes du jour" banner dismissal (×):**
+- × button in the banner title row → hides the banner
+- Stored in `localStorage['milieuxlab.alertsHidden.v1']` as `{ date, sig }` (sig = sorted `batchId:msg` list)
+- Hidden only for the SAME day AND the SAME alert set — reappears next day, or immediately if any new alert arrives (safety first)
 
 ### Data Model (in localStorage)
 - **Media** { id, name, type, shelfLifeDays, strain, fertilityDelayDays, sterilityFormat, sterilityValue, sterilityMinHours, sterilityMaxHours, **codeInterneRef** (letters-only reference, optional), isDefault }
@@ -345,3 +350,10 @@ None.
 - Day-details modal now lists registrations first ("ENREGISTRÉ") and includes them in the clickable-day count and subtitle
 - Verified: `node --check` + 7/7 calendar DOM tests (green only on registration day, none when no batches, none on fertility/sterility-only days)
 - **Follow-up:** first push forgot the SW cache bump → clients stuck on cached app.js (cache-first) kept seeing green dots. Bumped v5 → v6 in a follow-up commit. **RULE: bump CACHE_NAME on EVERY push that changes app files.**
+
+### 2026-07-19 — Session 12 — "Alertes du jour": day-of expiry only + × dismissal
+- **Bug:** expired lots stayed in the "Alertes du jour" banner forever (every day after expiry)
+- **Fix:** "EXPIRE AUJOURD'HUI" alert now pushed only when `isSameDay(now, expiryDate)` — vanishes automatically the next day
+- **New:** × close button in the banner title row (`.alerts-banner-close`); `dismissAlertsBanner(sig)` stores `{date, sig}` in `localStorage['milieuxlab.alertsHidden.v1']`; `isAlertsBannerDismissed(sig)` hides the banner only same-day + same alert signature, so it reappears next day or as soon as the alert set changes
+- SW cache bumped v6 → v7 (per the rule)
+- Verified: `node --check` + 9/9 DOM tests (old expired hidden, day-of shown, dismiss persists across re-render, reappears on new alert and next day)
