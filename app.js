@@ -1115,7 +1115,8 @@ async function openCoaViewerFromBlob(blob, name) {
   const pagesEl = document.getElementById('coa-viewer-pages');
   const sub = document.getElementById('coa-viewer-sub');
   if (!modal || !pagesEl) return;
-  pagesEl.innerHTML = '<div class="coa-loading">Chargement…</div>';
+  // Skeleton pages (shimmer) while pdf.js decodes and renders
+  pagesEl.innerHTML = '<div class="skeleton coa-skel-page"></div><div class="skeleton coa-skel-page" style="opacity:0.55"></div>';
   if (sub) sub.textContent = name || '';
   modal.classList.remove('hidden');
   try {

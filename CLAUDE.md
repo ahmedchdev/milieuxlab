@@ -435,6 +435,13 @@ None.
 - SW cache v15 → v16
 - Abbreviations used on the dashboard card (session 24): DDP, № ALB pH, № ALB E3, № ALB E4, № CYCLE STÉRIL
 
+### 2026-07-19 — Session 28 — Premium design pass 2: profondeur, encre, squelettes, cascade
+- **Depth system:** per-theme `--elev-1` / `--elev-2` (inset top highlight + layered key/ambient shadows; soft variants in light theme). Applied to .card, .batch-card, .media-card, .stat-tile (tiles deepen to elev-2 on press). .card's old inline shadow replaced by the token.
+- **Typographic ink:** `--title-ink` per-theme vertical gradient applied to .hero-title and .section-title via background-clip:text (fallback color kept); `font-optical-sizing:auto` on body; display tracking tightened to -0.032em.
+- **Skeletons:** `.skeleton` shimmer utility (per-theme `--shimmer`) + `.coa-skel-page` (A4 aspect-ratio). CoA viewer now shows 2 shimmering page placeholders while pdf.js renders (replaced the "Chargement…" text). Error paths unchanged.
+- **Stagger:** dashboard + media lists cascade in (40ms steps, capped at n+8, fill-mode both). prefers-reduced-motion still kills everything.
+- SW cache v21 → v22. Verified: node --check, CSS balanced (447), token usage sanity.
+
 ### 2026-07-19 — Session 27 — Premium feel: native page transitions + tactile polish
 - **Page transitions:** `go()` now wraps the view swap in `document.startViewTransition()` (feature-detected; skipped for prefers-reduced-motion). CSS: content cross-fades with a soft upward rise (`::view-transition-*(root)`, mx-page-in/out); `.app-header` and `.bottom-nav` get their own `view-transition-name` and `animation:none` so they stay perfectly still. `@supports (view-transition-name:none) { .view { animation:none } }` avoids double animation (VT drives it); browsers without VT keep the fadeUp fallback.
 - **Tactile feedback:** `:active { transform: scale(...) }` on .btn / .icon-btn / .nav-btn icon.
