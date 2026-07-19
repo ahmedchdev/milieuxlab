@@ -401,3 +401,9 @@ None.
 - **Transition note:** devices running ≤ v12 still use the OLD tap-to-update flow for THIS update (v13). One last tap (or two full app restarts) needed; automatic from v13 onward
 - SW cache v12 → v13
 - Verified: 14/14 harness tests (SW handlers, version reply, auto-reload once, flag/toast, legacy SKIP_WAITING)
+
+### 2026-07-19 — Session 19 — DEAD deployment URL diagnosed + cron fixed
+- **Root cause of "app never updates" on the user's device:** the old deployment URL `milieuxlab-m4tiziddd-ahmedchdevs-projects.vercel.app` returns **HTTP 410 GONE**. A PWA installed from that origin serves its offline cache forever and every update check fails silently. Production alias `https://milieuxlab-psi.vercel.app` is alive and current (v13).
+- **Fix for the device: uninstall the PWA and reinstall from `https://milieuxlab-psi.vercel.app`** (localStorage data on the dead origin is not migratable)
+- **Cron bug fixed:** `.github/workflows/alerts-cron.yml` was pinging the dead m4tiziddd URL (410 → every scheduled push-check failing). Both the `workflow_dispatch` default and the `APP_URL` fallback now point to `https://milieuxlab-psi.vercel.app`. Endpoint verified: `{"ok":true,...}`
+- **RULE: never hand out or hardcode deployment-specific URLs (`*-<hash>-*-projects.vercel.app`) — always use the production alias `milieuxlab-psi.vercel.app`.**
