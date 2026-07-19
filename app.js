@@ -581,11 +581,13 @@ function renderMedia() {
     const strainsTxt = mediumStrainText(m);
     const strainCount = mediumStrains(m).length;
     const inhib = mediumInhibStrains(m);
-    // Optional extra fields, only rendered when filled
-    const extras = [
-      ['pH', m.ph], ['Couleur', m.couleur], ['Additif', m.additif],
-      ['Aspect', m.aspect], ['Fournisseur', m.fournisseur],
-    ].filter(([, v]) => v && String(v).trim());
+    // pH / Couleur / Aspect / Fournisseur → two side-by-side pairs (same layout
+    // as Type/Conservation). Shown when at least one is filled; "—" for empties.
+    const pairFields = [
+      ['pH', m.ph], ['Couleur', m.couleur], ['Aspect', m.aspect], ['Fournisseur', m.fournisseur],
+    ];
+    const hasPair = pairFields.some(([, v]) => v && String(v).trim());
+    const additif = (m.additif && String(m.additif).trim()) ? m.additif : null;
     return `
       <div class="media-card ${isBroth ? 'broth' : ''}">
         <div class="media-head">
@@ -617,11 +619,16 @@ function renderMedia() {
             <span class="lbl">Souche${inhib.length > 1 ? 's' : ''} inhibition</span>
             <span class="val">${escapeHtml(inhib.join(' / '))}</span>
           </div>` : ''}
-          ${extras.map(([lbl, v]) => `
-          <div style="grid-column: 1/-1">
+          ${hasPair ? pairFields.map(([lbl, v]) => `
+          <div>
             <span class="lbl">${lbl}</span>
-            <span class="val">${escapeHtml(String(v))}</span>
-          </div>`).join('')}
+            <span class="val">${v && String(v).trim() ? escapeHtml(String(v)) : '—'}</span>
+          </div>`).join('') : ''}
+          ${additif ? `
+          <div style="grid-column: 1/-1">
+            <span class="lbl">Additif</span>
+            <span class="val">${escapeHtml(String(additif))}</span>
+          </div>` : ''}
           ${m.coa ? `
           <div style="grid-column: 1/-1">
             <span class="lbl">Certificat d'analyse</span>
@@ -630,6 +637,7 @@ function renderMedia() {
         </div>
         <div class="media-foot">
           <button class="icon-btn" data-medit="${m.id}">Modifier</button>
+          ${m.coa ? `<button class="icon-btn" data-mcoa="${m.id}">Voir le CoA</button>` : ''}
           <button class="icon-btn danger" data-mdel="${m.id}">Supprimer</button>
         </div>
       </div>
@@ -1493,7 +1501,6 @@ function init() {
   if (window.pdfjsLib) { try { pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.min.js'; } catch (e) {} }
   document.getElementById('m-coa-import').addEventListener('click', () => document.getElementById('m-coa-file').click());
   document.getElementById('m-coa-file').addEventListener('change', (e) => onCoaFileChosen(e.target.files && e.target.files[0]));
-  document.getElementById('m-coa-view').addEventListener('click', viewFormCoa);
   document.getElementById('m-coa-remove').addEventListener('click', coaFormMarkRemove);
   const coaClose = document.getElementById('coa-viewer-close');
   if (coaClose) coaClose.addEventListener('click', closeCoaViewer);

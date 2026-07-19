@@ -1143,7 +1143,7 @@ input[type="date"].field-input, input[type="time"].field-input { font-variant-nu
 .media-grid .val { color: var(--fg); font-weight: 500; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .media-grid .val.blue { color: var(--accent); }
 
-.media-foot { display: flex; justify-content: flex-end; margin-top: var(--space-3); }
+.media-foot { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-3); }
 
 /* ============================================================
    SETTINGS

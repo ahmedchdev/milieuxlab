@@ -435,6 +435,14 @@ None.
 - SW cache v15 → v16
 - Abbreviations used on the dashboard card (session 24): DDP, № ALB pH, № ALB E3, № ALB E4, № CYCLE STÉRIL
 
+### 2026-07-19 — Session 25 — Carte milieu : paires pH/Couleur & Aspect/Fournisseur + bouton "Voir le CoA"
+- Media card: pH / Couleur / Aspect / Fournisseur now render as two side-by-side pairs (plain grid cells like Type/Conservation) instead of full-width rows — row 1 pH|Couleur, row 2 Aspect|Fournisseur; shown when at least one is filled, "—" for empties. Additif stays a full-width row (unchanged). CoA grid line unchanged.
+- Media card foot now has THREE buttons: Modifier · Voir le CoA · Supprimer. "Voir le CoA" (data-mcoa, reuses the existing viewer delegation) appears ONLY when the medium has a saved CoA.
+- Per the user's clarification, the "Voir le CoA" button was REMOVED from the create/edit FORM (deleted `m-coa-view` button + its listener; kept Importer + status + Retirer). CoA viewing is now a list-card-only action. `viewFormCoa()` left defined but unused.
+- `.media-foot` got `gap: var(--space-2)` for the 3-button row.
+- SW cache v18 → v19
+- Verified: 11/11 tests (pairs are plain cells, Additif full-width, CoA button only on cards with a CoA, form has no view button).
+
 ### 2026-07-19 — Session 24 — Bloc traçabilité sur les cartes + FIX bug de duplication
 - **Dashboard batch card:** new `.batch-trace` block placed right under the medium designation (name + strains), before the dates. Shows 5 abbreviated fields in a 3+2 grid (same lbl/val style): DDP (supplierExpiryDate, formatted), № ALB pH (actionPhmetre), № ALB E3, № ALB E4, № CYCLE STÉRIL (cycleSterilisation). Empty cells show "—"; the whole block is omitted when none of the 5 is filled. Rest of the card unchanged.
 - **FIXED duplication bug:** `saveBatch` always pushed a NEW batch, so editing from the dashboard created a copy. Added `_editingBatchId` (set by `editBatch`, cleared by `renderRegister` on fresh navigation and after save). On save: if `_editingBatchId` is set, Object.assign onto the existing batch (id + createdAt preserved) → "Lot mis à jour"; else create new → "Lot enregistré".
