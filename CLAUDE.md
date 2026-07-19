@@ -435,6 +435,13 @@ None.
 - SW cache v15 → v16
 - Abbreviations used on the dashboard card (session 24): DDP, № ALB pH, № ALB E3, № ALB E4, № CYCLE STÉRIL
 
+### 2026-07-19 — Session 27 — Premium feel: native page transitions + tactile polish
+- **Page transitions:** `go()` now wraps the view swap in `document.startViewTransition()` (feature-detected; skipped for prefers-reduced-motion). CSS: content cross-fades with a soft upward rise (`::view-transition-*(root)`, mx-page-in/out); `.app-header` and `.bottom-nav` get their own `view-transition-name` and `animation:none` so they stay perfectly still. `@supports (view-transition-name:none) { .view { animation:none } }` avoids double animation (VT drives it); browsers without VT keep the fadeUp fallback.
+- **Tactile feedback:** `:active { transform: scale(...) }` on .btn / .icon-btn / .nav-btn icon.
+- **Native touches:** momentum scrolling + text-size-adjust on html/body; `user-select:none` on chrome (header, nav, buttons, labels, tags) while values/inputs stay selectable.
+- scrollTo on nav is now instant (was smooth) so it doesn't fight the transition.
+- SW cache v20 → v21. Verified: node --check, CSS balanced, 9/9 go() tests (both VT and fallback paths switch views correctly).
+
 ### 2026-07-19 — Session 26 — Sauvegarde & restauration
 - New Réglages card "💾 Sauvegarde et restauration" with two buttons: "Sauvegarder mes données" (`btn-backup`) and "Restaurer des données" (`btn-restore` → hidden `restore-file` input).
 - **Export (`exportBackup`)**: flushes state, gathers localStorage (media, batches, settings, deletedDefaults, theme — NOT the transient alertsHidden) + every CoA PDF from IndexedDB encoded base64. One JSON file `{ app:'MilieuXlab', schema:1, exportedAt, data, coa }`, filename `milieuxlab-sauvegarde-YYYY-MM-DD.json`. Uses Web Share (files) on mobile — reliable "Save to Files" on iOS — with a `<a download>` Blob fallback on desktop/older browsers.

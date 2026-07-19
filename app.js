@@ -721,14 +721,23 @@ function renderSettings() {
    ============================================================ */
 
 function go(view) {
-  state.currentView = view;
-  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.dataset.view === view));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.go === view));
-  if (view === 'dashboard') renderDashboard();
-  if (view === 'register')  renderRegister();
-  if (view === 'media')     renderMedia();
-  if (view === 'settings')  renderSettings();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  const applyView = () => {
+    state.currentView = view;
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.dataset.view === view));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.go === view));
+    if (view === 'dashboard') renderDashboard();
+    if (view === 'register')  renderRegister();
+    if (view === 'media')     renderMedia();
+    if (view === 'settings')  renderSettings();
+    window.scrollTo({ top: 0 });
+  };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Native-style animated page transition when supported; instant otherwise.
+  if (typeof document.startViewTransition === 'function' && !reduce) {
+    document.startViewTransition(applyView);
+  } else {
+    applyView();
+  }
 }
 
 /* ============================================================

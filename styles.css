@@ -145,6 +145,9 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;   /* momentum scrolling — native feel */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -351,6 +354,37 @@ body::before {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ============================================================
+   PREMIUM MOTION — native-style page transitions + tactile feedback
+   ============================================================ */
+
+/* Page transitions via the View Transitions API (see go() in app.js).
+   The header and bottom-nav opt out so they stay perfectly still while the
+   page content cross-fades with a soft upward rise — the way a native app
+   feels. Browsers without support fall back to the per-view fadeUp above. */
+.app-header { view-transition-name: mx-header; }
+.bottom-nav { view-transition-name: mx-nav; }
+::view-transition-old(mx-header), ::view-transition-new(mx-header),
+::view-transition-old(mx-nav),   ::view-transition-new(mx-nav) { animation: none; }
+
+::view-transition-old(root) { animation: mx-page-out 150ms cubic-bezier(0.4, 0, 1, 1) both; }
+::view-transition-new(root) { animation: mx-page-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes mx-page-out { to { opacity: 0; } }
+@keyframes mx-page-in  { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+@supports (view-transition-name: none) {
+  .view { animation: none; }   /* the View Transition drives the motion instead */
+}
+
+/* Tactile press feedback — taps feel like a native control, not a link */
+.btn:active { transform: scale(0.97); }
+.icon-btn:active { transform: scale(0.95); }
+.nav-btn:active .nav-icon { transform: scale(0.9); }
+
+/* UI chrome shouldn't feel like selectable web text (values stay selectable) */
+.app-header, .bottom-nav, .nav-btn, .btn, .icon-btn, .section-head,
+.field-label, .lbl, .tag, .stat-lbl { -webkit-user-select: none; user-select: none; }
 
 .section-head { display: flex; align-items: center; justify-content: space-between; padding: 0; gap: var(--space-3); }
 .section-title { font-size: var(--text-2xl); letter-spacing: -0.03em; font-weight: 800; }
