@@ -433,3 +433,8 @@ None.
 - Added 4 optional text fields below "Heure de préparation" (before the Dates calculées block): Numéro d'action log book pH mètre (`f-act-phmetre`), Numéro d'action étuve 3 (`f-act-etuve3`), Numéro d'action étuve 4 (`f-act-etuve4`), Numéro de cycle de stérilisation (`f-cycle-steril`)
 - Stored on the batch (actionPhmetre / actionEtuve3 / actionEtuve4 / cycleSterilisation), prefilled on edit. Same field style. Rest unchanged.
 - SW cache v15 → v16
+
+### 2026-07-19 — Session 23 — Retrait des mentions "(optionnel)"
+- Removed all "(optionnel)" hints from field labels (12 plain spans deleted); compound hints kept the meaningful part: "(optionnel, lettres)" → "(lettres)", "(PDF, optionnel)" → "(PDF)". "(jours)" untouched.
+- `.field-optional` CSS class still used by the remaining hints.
+- SW cache v16 → v17
