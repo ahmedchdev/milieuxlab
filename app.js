@@ -1083,6 +1083,14 @@ function idbDeleteCoa(key) {
     tx.onerror = () => reject(tx.error);
   }));
 }
+function idbClearCoa() {
+  return idbOpen().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(COA_STORE, 'readwrite');
+    tx.objectStore(COA_STORE).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
 
 /* --- Lecteur PDF inline (pdf.js) --- */
 async function openCoaViewer(mediumId, name) {
@@ -1132,6 +1140,140 @@ function closeCoaViewer() {
   if (modal) modal.classList.add('hidden');
   const pagesEl = document.getElementById('coa-viewer-pages');
   if (pagesEl) pagesEl.innerHTML = '';
+}
+
+/* ============================================================
+   SAUVEGARDE / RESTAURATION
+   Exporte tout (localStorage + fichiers CoA en base64) dans un fichier JSON.
+   La restauration remplace les données actuelles puis recharge l'app.
+   ============================================================ */
+
+const BACKUP_KEYS = [STORAGE.MEDIA, STORAGE.BATCHES, STORAGE.SETTINGS, STORAGE.DELETED_DEFAULTS, THEME_KEY];
+
+// Pure: gather the localStorage part of a backup (unit-testable, no browser APIs)
+function collectBackupLocalStorage() {
+  const data = {};
+  BACKUP_KEYS.forEach(k => {
+    const v = localStorage.getItem(k);
+    if (v != null) data[k] = v;
+  });
+  return data;
+}
+
+// Pure: is this object a valid MilieuXlab backup?
+function validateBackup(obj) {
+  return !!(obj && obj.app === 'MilieuXlab' && obj.data && typeof obj.data === 'object');
+}
+
+// Pure: write a backup's localStorage part (clears known keys first)
+function applyBackupLocalStorage(backup) {
+  BACKUP_KEYS.forEach(k => localStorage.removeItem(k));
+  Object.keys(backup.data).forEach(k => localStorage.setItem(k, backup.data[k]));
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+function base64ToBlob(b64, type) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: type || 'application/pdf' });
+}
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+}
+
+async function exportBackup() {
+  try {
+    persist();  // flush current state to localStorage first
+    const data = collectBackupLocalStorage();
+    // Gather CoA files (base64) for every medium that has one
+    const coa = {};
+    const mediaArr = JSON.parse(data[STORAGE.MEDIA] || '[]');
+    for (const m of mediaArr) {
+      if (m && m.coa) {
+        try {
+          const blob = await idbGetCoa(m.id);
+          if (blob) coa[m.id] = { name: m.coa.name || 'coa.pdf', type: blob.type || 'application/pdf', dataBase64: await blobToBase64(blob) };
+        } catch (e) { /* skip a missing CoA */ }
+      }
+    }
+    const backup = { app: 'MilieuXlab', schema: 1, exportedAt: new Date().toISOString(), data, coa };
+    const filename = `milieuxlab-sauvegarde-${new Date().toISOString().slice(0, 10)}.json`;
+    const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
+
+    // Prefer the share sheet on mobile (reliable "Save to Files" on iOS); fall back to download
+    try {
+      if (navigator.canShare) {
+        const file = new File([blob], filename, { type: 'application/json' });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: 'Sauvegarde MilieuXlab' });
+            toast('Sauvegarde exportée.', 'success');
+            return;
+          } catch (e) {
+            if (e && e.name === 'AbortError') return;   // user cancelled — don't double-export
+          }
+        }
+      }
+    } catch (e) { /* File/share unsupported → download instead */ }
+    downloadBlob(blob, filename);
+    toast('Sauvegarde téléchargée.', 'success');
+  } catch (e) {
+    console.warn('Backup failed', e);
+    toast('Échec de la sauvegarde.', 'error');
+  }
+}
+
+async function importBackup(file) {
+  if (!file) return;
+  let backup;
+  try {
+    backup = JSON.parse(await file.text());
+  } catch (e) {
+    return toast('Fichier de sauvegarde illisible.', 'error');
+  }
+  if (!validateBackup(backup)) return toast("Ce fichier n'est pas une sauvegarde MilieuXlab.", 'error');
+
+  const nbLots = (() => { try { return JSON.parse(backup.data[STORAGE.BATCHES] || '[]').length; } catch (e) { return 0; } })();
+  const nbMilieux = (() => { try { return JSON.parse(backup.data[STORAGE.MEDIA] || '[]').length; } catch (e) { return 0; } })();
+  const nbCoa = backup.coa ? Object.keys(backup.coa).length : 0;
+
+  confirmAction(
+    'Restaurer cette sauvegarde ?',
+    `Vos données actuelles seront remplacées par : ${nbMilieux} milieu(x), ${nbLots} lot(s)${nbCoa ? `, ${nbCoa} CoA` : ''}. Cette action est irréversible.`,
+    async () => {
+      try {
+        applyBackupLocalStorage(backup);
+        // Restore CoA files into IndexedDB (clear first so nothing stale remains)
+        try {
+          await idbClearCoa();
+          if (backup.coa) {
+            for (const [id, c] of Object.entries(backup.coa)) {
+              if (c && c.dataBase64) await idbPutCoa(id, base64ToBlob(c.dataBase64, c.type));
+            }
+          }
+        } catch (e) { console.warn('CoA restore issue', e); }
+        toast('Sauvegarde restaurée.', 'success');
+        setTimeout(() => window.location.reload(), 800);
+      } catch (e) {
+        console.warn('Restore failed', e);
+        toast('Échec de la restauration.', 'error');
+      }
+    }
+  );
 }
 
 /* ============================================================
@@ -1548,6 +1690,15 @@ function init() {
       persist();
     });
   }
+  // Backup / restore
+  document.getElementById('btn-backup').addEventListener('click', exportBackup);
+  document.getElementById('btn-restore').addEventListener('click', () => document.getElementById('restore-file').click());
+  document.getElementById('restore-file').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    importBackup(f);
+    e.target.value = '';   // allow re-selecting the same file later
+  });
+
   document.getElementById('btn-reset-batches').addEventListener('click', () => {
     confirmAction('Supprimer tous les lots ?', 'Tous les lots enregistrés seront effacés.', () => {
       state.batches = [];

@@ -435,6 +435,14 @@ None.
 - SW cache v15 → v16
 - Abbreviations used on the dashboard card (session 24): DDP, № ALB pH, № ALB E3, № ALB E4, № CYCLE STÉRIL
 
+### 2026-07-19 — Session 26 — Sauvegarde & restauration
+- New Réglages card "💾 Sauvegarde et restauration" with two buttons: "Sauvegarder mes données" (`btn-backup`) and "Restaurer des données" (`btn-restore` → hidden `restore-file` input).
+- **Export (`exportBackup`)**: flushes state, gathers localStorage (media, batches, settings, deletedDefaults, theme — NOT the transient alertsHidden) + every CoA PDF from IndexedDB encoded base64. One JSON file `{ app:'MilieuXlab', schema:1, exportedAt, data, coa }`, filename `milieuxlab-sauvegarde-YYYY-MM-DD.json`. Uses Web Share (files) on mobile — reliable "Save to Files" on iOS — with a `<a download>` Blob fallback on desktop/older browsers.
+- **Restore (`importBackup`)**: file picker → parse → `validateBackup` (must be app==='MilieuXlab' + data) → confirm dialog showing counts → `applyBackupLocalStorage` (clears BACKUP_KEYS then writes) + `idbClearCoa` then re-put CoA blobs → reload. Replace semantics (correct for post-reinstall restore).
+- Pure helpers `collectBackupLocalStorage` / `validateBackup` / `applyBackupLocalStorage` are unit-tested (16/16). base64/IDB/Share are browser-only (guarded).
+- `idbClearCoa()` added. SW cache v19 → v20.
+- CoA files ARE included in the backup, so a backup is fully self-sufficient after app deletion.
+
 ### 2026-07-19 — Session 25 — Carte milieu : paires pH/Couleur & Aspect/Fournisseur + bouton "Voir le CoA"
 - Media card: pH / Couleur / Aspect / Fournisseur now render as two side-by-side pairs (plain grid cells like Type/Conservation) instead of full-width rows — row 1 pH|Couleur, row 2 Aspect|Fournisseur; shown when at least one is filled, "—" for empties. Additif stays a full-width row (unchanged). CoA grid line unchanged.
 - Media card foot now has THREE buttons: Modifier · Voir le CoA · Supprimer. "Voir le CoA" (data-mcoa, reuses the existing viewer delegation) appears ONLY when the medium has a saved CoA.

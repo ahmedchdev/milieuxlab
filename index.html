@@ -581,6 +581,16 @@
           </ul>
         </div>
 
+        <div class="card">
+          <div class="card-head">
+            <h3 class="card-title">💾 Sauvegarde et restauration</h3>
+          </div>
+          <p class="setting-sub" style="margin-bottom: var(--space-3)">Exportez toutes vos données (milieux, lots, réglages et certificats CoA) dans un fichier. Conservez-le en lieu sûr pour tout restaurer après une réinstallation.</p>
+          <button class="btn btn-secondary btn-block" id="btn-backup">Sauvegarder mes données</button>
+          <input type="file" id="restore-file" accept="application/json,.json" hidden />
+          <button class="btn btn-ghost btn-block" id="btn-restore" style="margin-top: var(--space-2)">Restaurer des données</button>
+        </div>
+
         <button class="btn btn-danger btn-block" id="btn-reset-batches">Supprimer tous les lots</button>
         <button class="btn btn-ghost btn-block" id="btn-reset-all">Réinitialiser l'application</button>
 
