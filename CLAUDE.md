@@ -371,3 +371,9 @@ None.
 - "Ajouter un milieu personnalisé" button now sits at the TOP of the Milieux view (was below the list)
 - `media-form-wrap` moved directly under the button, media list below — the add/edit form opens right where the button is (showMediaForm's scrollIntoView still centers it for edits)
 - SW cache v8 → v9
+
+### 2026-07-19 — Session 15 — Form field label/input association fix
+- **Bug:** no vertical spacing existed between `.field` blocks — the previous input sat flush against the next label, so labels looked attached to the input ABOVE ("Nouveau milieu" form especially)
+- **Fix:** `#batch-form, #media-form { display:flex; flex-direction:column; gap: var(--space-4) }` — 16px between fields vs 8px label→input (2:1 proximity ratio, labels clearly belong to the input below)
+- Note: hidden inputs (`m-id`) and `.hidden` wraps are display:none so flex gap skips them
+- SW cache v9 → v10
