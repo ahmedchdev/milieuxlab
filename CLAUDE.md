@@ -435,6 +435,23 @@ None.
 - SW cache v15 → v16
 - Abbreviations used on the dashboard card (session 24): DDP, № ALB pH, № ALB E3, № ALB E4, № CYCLE STÉRIL
 
+### 2026-07-20 — Session 29 — CI/CD audit (failing workflow) + notification system audit & fixes
+
+**TASK 1 — Failing GitHub Actions workflow (evidence-based):**
+- Evidence: `GET api.github.com/repos/ahmedchdev/milieuxlab/actions/runs` → `alerts-cron` is `conclusion=failure` on EVERY scheduled run (302 runs total, failing continuously). `deploy-vercel` runs are `conclusion=skipped` (its `if:false` guard works) — NOT failing, harmless dead weight; left as-is.
+- Root cause: `alerts-cron.yml` on `main` STILL pings the dead deployment URL `milieuxlab-m4tiziddd-ahmedchdevs-projects.vercel.app` (lines 16 + 35). That origin returns **HTTP 410 GONE** → the workflow's curl step sees non-2xx → `exit 1` → run fails. (Session 19's local fix to the `-psi` alias was never pushed.)
+- The workflow IS necessary: it is the only scheduler hitting `/api/cron-check-alerts`, which drives all background Web Push. The live alias `https://milieuxlab-psi.vercel.app/api/cron-check-alerts` returns `{"ok":true,"sent":1,...}` (HTTP 200) — so fixing the URL makes runs pass.
+- Fix prepared (replace both dead-URL occurrences with `https://milieuxlab-psi.vercel.app`). **BLOCKED from pushing:** the GitHub integration token returns `403 Resource not accessible by integration` for any write under `.github/workflows/` (GitHub App lacks `workflows: write`). Reproduced via both `push_files` and `create_or_update_file`. → Handed the exact 2-line change + edit link to the user; corrected file staged at `/tmp/alerts-cron-fixed.yml`.
+
+**TASK 2 — Notification system audit (traced end-to-end):**
+Flow: in-app banner (renders from state) → local poller (`startNotificationPoller`/`checkAlertsForNotification` every 5 min, tab-hidden only, `fireBrowserNotification`) → Web Push (`registerServiceWorker`→`maybeSubscribePush` subscribes + POSTs to `/api/save-subscription` into Upstash Redis; `alerts-cron` → `/api/cron-check-alerts` re-evaluates each device's stored `batches` and `webpush.sendNotification`; `sw.js` `push` handler → `showNotification`).
+Bugs found & FIXED (app.js, shippable):
+1. **iOS never showed local notifications** — `fireBrowserNotification` used `new Notification()`, which THROWS in iOS Safari PWAs (was silently caught). Now prefers `registration.showNotification()` (works iOS + Android + desktop), constructor only as desktop fallback.
+2. **Stale server snapshot** — batches were POSTed to `/api/save-subscription` only once at subscribe time, so the cron evaluated outdated data forever. Added `syncPushState()` + debounced `schedulePushSync()`, called after every batch mutation (saveBatch, deleteBatch, reset-batches, reset-all).
+3. **No immediate subscribe** — enabling the Réglages notifications toggle now calls `registerServiceWorker()` right away (was: only on next launch).
+Still user-dependent (cannot be fixed in code): (a) Task-1 workflow URL — until fixed, the cron never fires so background push stays silent; (b) OS-level notification permission must be granted; (c) iOS requires the PWA be installed to Home Screen (Notification/Push unavailable in the browser tab).
+- SW cache v22 → v23. Verified: node --check (app/sw/api); 8/8 DOM tests (SW-first notification + ctor fallback, syncPushState POST body, no-op when unsubscribed, debounce fires).
+
 ### 2026-07-19 — Session 28 — Premium design pass 2: profondeur, encre, squelettes, cascade
 - **Depth system:** per-theme `--elev-1` / `--elev-2` (inset top highlight + layered key/ambient shadows; soft variants in light theme). Applied to .card, .batch-card, .media-card, .stat-tile (tiles deepen to elev-2 on press). .card's old inline shadow replaced by the token.
 - **Typographic ink:** `--title-ink` per-theme vertical gradient applied to .hero-title and .section-title via background-clip:text (fallback color kept); `font-optical-sizing:auto` on body; display tracking tightened to -0.032em.

@@ -796,6 +796,7 @@ function saveBatch(e) {
     persist();
     toast('Lot enregistré avec succès.', 'success');
   }
+  schedulePushSync();   // keep server-side snapshot current for background push
   document.getElementById('batch-form').reset();
   go('dashboard');
 }
@@ -823,6 +824,7 @@ function deleteBatch(id) {
   confirmAction('Supprimer ce lot ?', 'Cette action est irréversible.', () => {
     state.batches = state.batches.filter(b => b.id !== id);
     persist();
+    schedulePushSync();
     renderDashboard();
     toast('Lot supprimé.', 'success');
   });
@@ -1300,17 +1302,30 @@ async function requestNotificationPermission() {
   renderSettings();
 }
 
-function fireBrowserNotification(alerts) {
+async function fireBrowserNotification(alerts) {
   if (!state.settings.browserNotifications) return;
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  if (alerts.length === 0) return;
-  const text = alerts.slice(0, 3).map(a => `• ${a.medium}: ${a.msg}`).join('\n');
+  if (!alerts || alerts.length === 0) return;
+  const title = `MilieuXlab — ${alerts.length} alerte${alerts.length > 1 ? 's' : ''}`;
+  const options = {
+    body: alerts.slice(0, 3).map(a => `• ${a.medium}: ${a.msg}`).join('\n'),
+    icon: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0A0E14"/><text x="50%" y="58%" text-anchor="middle" font-family="Arial" font-size="24" font-weight="bold" fill="#00C896">MX</text></svg>'),
+    tag: 'milieuxlab-local-alert',
+    renotify: true,
+  };
+  // iOS Safari PWAs do NOT support the `new Notification()` constructor — it
+  // throws. The Service Worker registration's showNotification() is the only
+  // reliable path there, and it works on Android/desktop too, so prefer it.
   try {
-    new Notification(`MilieuXlab — ${alerts.length} alerte${alerts.length > 1 ? 's' : ''}`, {
-      body: text,
-      icon: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0A0E14"/><text x="50%" y="58%" text-anchor="middle" font-family="Arial" font-size="24" font-weight="bold" fill="#00C896">MX</text></svg>'),
-    });
-  } catch (e) { /* silent */ }
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg && 'showNotification' in reg) {
+        await reg.showNotification(title, options);
+        return;
+      }
+    }
+  } catch (e) { /* fall through to the constructor */ }
+  try { new Notification(title, options); } catch (e) { /* unsupported (e.g. iOS) */ }
 }
 
 /* ============================================================
@@ -1683,6 +1698,11 @@ function init() {
   document.getElementById('s-notif').addEventListener('change', async (e) => {
     if (e.target.checked) {
       await requestNotificationPermission();
+      // Subscribe to Web Push right away (don't wait for the next launch) so
+      // the device starts receiving background alerts immediately.
+      if (state.settings.browserNotifications && isInstalledPWA()) {
+        registerServiceWorker();
+      }
     } else {
       state.settings.browserNotifications = false;
       persist();
@@ -1713,6 +1733,7 @@ function init() {
     confirmAction('Supprimer tous les lots ?', 'Tous les lots enregistrés seront effacés.', () => {
       state.batches = [];
       persist();
+      schedulePushSync();
       renderDashboard();
       toast('Tous les lots ont été supprimés.', 'success');
     });
@@ -1727,6 +1748,7 @@ function init() {
       renderDashboard();
       renderMedia();
       renderSettings();
+      schedulePushSync();
       toast('Application réinitialisée.', 'success');
     });
   });
@@ -2081,6 +2103,30 @@ async function maybeSubscribePush(reg, vapidPublicKey) {
   } catch (e) {
     console.warn('Push subscription failed:', e);
   }
+}
+
+// Keep the server's stored batch snapshot fresh so the 5-min cron evaluates
+// CURRENT data. Without this, /api/save-subscription only ever received the
+// batches present at subscribe time, so new/edited/deleted batches never
+// affected the background push. Debounced; no-op if the device isn't subscribed.
+let _pushSyncTimer = null;
+function schedulePushSync() {
+  clearTimeout(_pushSyncTimer);
+  _pushSyncTimer = setTimeout(syncPushState, 1500);
+}
+async function syncPushState() {
+  try {
+    if (!('serviceWorker' in navigator)) return;
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg || !reg.pushManager) return;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;   // not subscribed yet → nothing to sync
+    await fetch('/api/save-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: sub.toJSON(), batches: state.batches, media: state.media }),
+    });
+  } catch (e) { console.warn('syncPushState failed', e); }
 }
 
 function urlBase64ToUint8Array(base64String) {
